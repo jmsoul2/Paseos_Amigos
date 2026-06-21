@@ -71,7 +71,7 @@
     if (pe.error || ex.error || pa.error) throw (pe.error || ex.error || pa.error);
     const partsByExp = {};
     (pa.data || []).forEach(r => { (partsByExp[r.expense_id] = partsByExp[r.expense_id] || []).push(r.person_id); });
-    const people = (pe.data || []).map(r => ({ id: r.id, name: r.name }));
+    const people = (pe.data || []).map(r => ({ id: r.id, name: r.name, confirmed: !!r.confirmed }));
     const expenses = (ex.data || []).map(r => ({
       id: r.id, concepto: r.concepto || '', dia: r.dia || '',
       valor: Number(r.valor) || 0, payerId: r.payer_id || '',
@@ -151,6 +151,9 @@
       case 'removePerson':
         await run(sb.from('people').delete().eq('id', d.id)); // cascada borra chulos; pagador → null
         break;
+      case 'confirm':
+        await run(sb.from('people').update({ confirmed: !!d.on }).eq('id', d.id));
+        break;
       case 'addExpense': {
         const ex = s.expenses.find(x => x.id === d.id) || {};
         await run(sb.from('expenses').insert({
@@ -164,9 +167,14 @@
       case 'removeExpense':
         await run(sb.from('expenses').delete().eq('id', d.id)); // cascada borra chulos
         break;
-      case 'updateExpense': { // por aquí solo llega el pagador (el texto va por 'cuentas:field')
+      case 'updateExpense': { // pagador y, desde el formulario, concepto/día/valor en UNA escritura
         const p = d.patch || {};
-        if ('payerId' in p) await run(sb.from('expenses').update({ payer_id: p.payerId || null }).eq('id', d.id));
+        const patch = {};
+        if ('concepto' in p) patch.concepto = p.concepto;
+        if ('dia' in p) patch.dia = p.dia;
+        if ('valor' in p) patch.valor = p.valor;
+        if ('payerId' in p) patch.payer_id = p.payerId || null;
+        if (Object.keys(patch).length) await run(sb.from('expenses').update(patch).eq('id', d.id));
         break;
       }
       case 'toggleParticipation':

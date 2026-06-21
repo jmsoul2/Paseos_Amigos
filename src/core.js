@@ -18,21 +18,21 @@
     noche: {
       '--bg': '#0a0a0c', '--panel': '#141319', '--inset': '#1d1c25',
       '--fg': '#f4f4f6', '--muted': '#8c8b98', '--line': 'rgba(255,255,255,0.09)',
-      '--accent': '#c2f24a', '--accent-fg': '#0a0a0c', '--pos': '#65e6a1', '--neg': '#ff7d7d',
+      '--accent': '#c2f24a', '--accent-fg': '#0a0a0c', '--pos': '#65e6a1', '--neg': '#ff7d7d', '--confirm': '#4d9bff',
       '--font-head': "'Space Grotesk',sans-serif", '--font-body': "'Space Grotesk',sans-serif",
       '--font-num': "'Space Mono',monospace",
     },
     limpio: {
       '--bg': '#f3f4f7', '--panel': '#ffffff', '--inset': '#f1f3f6',
       '--fg': '#15171d', '--muted': '#717684', '--line': 'rgba(20,23,29,0.10)',
-      '--accent': '#4f46e5', '--accent-fg': '#ffffff', '--pos': '#0e9f6e', '--neg': '#e5484d',
+      '--accent': '#4f46e5', '--accent-fg': '#ffffff', '--pos': '#0e9f6e', '--neg': '#e5484d', '--confirm': '#2563eb',
       '--font-head': "'Plus Jakarta Sans',sans-serif", '--font-body': "'Plus Jakarta Sans',sans-serif",
       '--font-num': "'Space Mono',monospace",
     },
     calido: {
       '--bg': '#f1e9dc', '--panel': '#fbf6ee', '--inset': '#efe5d5',
       '--fg': '#2c2419', '--muted': '#8d7d68', '--line': 'rgba(70,48,22,0.14)',
-      '--accent': '#c4632d', '--accent-fg': '#fbf6ee', '--pos': '#4e7a3f', '--neg': '#b5482f',
+      '--accent': '#c4632d', '--accent-fg': '#fbf6ee', '--pos': '#4e7a3f', '--neg': '#b5482f', '--confirm': '#2f6db0',
       '--font-head': "'Newsreader',serif", '--font-body': "'Plus Jakarta Sans',sans-serif",
       '--font-num': "'Space Mono',monospace",
     },
@@ -40,7 +40,7 @@
 
   /* ---------------- estado ---------------- */
   let state = load() || freshState();
-  if (!state.view) state.view = 'tabla';
+  state.view = 'tabla'; // el Total es siempre el landing (en todos los dispositivos)
   if (!state.theme) state.theme = 'noche';
 
   function freshState() {
@@ -165,7 +165,7 @@
       name = (name != null ? name : state.newPerson || '').trim();
       if (!name) return null;
       const id = uid('p');
-      state.people.push({ id, name });
+      state.people.push({ id, name, confirmed: false });
       // Por defecto, una persona nueva entra en TODOS los gastos existentes.
       state.expenses.forEach(e => { if (!e.parts.includes(id)) e.parts.push(id); });
       state.newPerson = '';
@@ -180,14 +180,23 @@
       });
       emit('removePerson', { id });
     },
+    // Confirmación personal: "revisé mis gastos y quedo listo". Estado compartido.
+    toggleConfirm(id) {
+      const p = state.people.find(x => x.id === id);
+      if (!p) return;
+      p.confirmed = !p.confirmed;
+      emit('confirm', { id, on: p.confirmed });
+    },
 
-    addExpense() {
+    addExpense(fields) {
       const id = uid('e');
-      const exp = {
-        id, concepto: '', dia: '', valor: 0,
+      // Defaults + lo que venga del formulario (concepto/día/valor/pagador).
+      // parts arranca con TODOS (mismo criterio que addPerson); luego se ajusta con chulos.
+      const exp = Object.assign({
+        concepto: '', dia: '', valor: 0,
         payerId: (state.people[0] && state.people[0].id) || '',
         parts: state.people.map(p => p.id),
-      };
+      }, fields || {}, { id });
       state.expenses.push(exp);
       emit('addExpense', { id });
       return id;
@@ -249,7 +258,7 @@
     example,
     // mutaciones
     setTripName: M.setTripName, setTheme: M.setTheme, setView: M.setView, setNewPerson: M.setNewPerson,
-    addPerson: M.addPerson, removePerson: M.removePerson,
+    addPerson: M.addPerson, removePerson: M.removePerson, toggleConfirm: M.toggleConfirm,
     addExpense: M.addExpense, updateExpense: M.updateExpense, removeExpense: M.removeExpense,
     toggleParticipation: M.toggleParticipation, setAll: M.setAll, setNone: M.setNone,
     loadExample: M.loadExample, clearAll: M.clearAll, replaceState: M.replaceState,

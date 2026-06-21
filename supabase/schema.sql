@@ -14,8 +14,11 @@
 create table if not exists people (
   id          text primary key,
   name        text not null default '',
+  confirmed   boolean not null default false,
   created_at  timestamptz not null default now()
 );
+-- Migración para tablas ya creadas (seguro re-ejecutar):
+alter table people add column if not exists confirmed boolean not null default false;
 
 create table if not exists expenses (
   id          text primary key,

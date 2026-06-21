@@ -24,16 +24,19 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
     cálculos puros (`computeNets`, `computeOwed`, `computeTransfers`, `buildSummary`),
     temas (`THEMES`), datos de ejemplo, y **API de mutaciones granular**. Cada mutación
     guarda y emite `cuentas:changed` con `{ op, ... }`.
-  - `app.js` — Capa de UI: render de las vistas **Tabla** y **Tarjetas** (tema único
-    Noche), delegación de eventos en `#app`. Redibuja en `cuentas:changed` y en
-    `cuentas:remote-applied` preservando foco/cursor. Los campos de texto avisan al
-    sync por `cuentas:field`. Estilos inline portados 1:1 del handoff (alta fidelidad).
+  - `app.js` — Capa de UI: render de las vistas **Total** (tabla tipo Excel) y **Yo**
+    (hoja personal: se filtra una persona y marca solo lo suyo), tema único Noche.
+    Delegación de eventos en `#app`. Redibuja en `cuentas:changed` y `cuentas:remote-applied`
+    preservando foco/cursor **y el scroll de la matriz**. Agregar/editar gasto = **modal**
+    (vive fuera de `#app` para sobrevivir a los re-render). **Confirmar** = chulo azul por
+    persona; **imagen** de "para quedar en paz" dibujada en `<canvas>` (sin librerías).
+    El título del paseo avisa al sync por `cuentas:field`. Estilos inline 1:1 del handoff.
   - `sync.js` — Sincronización en vivo con Supabase: carga inicial (+siembra si vacío),
     suscripción realtime → re-fetch → `replaceState` silencioso, y traducción de cada
     acción a su escritura (chulo = una fila). Pastilla de estado abajo-izquierda.
   - `supabase-config.js` — `url` + `anonKey` (públicos por diseño; la seguridad la da RLS).
-- `supabase/schema.sql` — Tablas (`people`, `expenses`, `participations`, `trip_meta`),
-  RLS de link abierto y `realtime`. Pegar en el SQL Editor de Supabase.
+- `supabase/schema.sql` — Tablas (`people` con `confirmed`, `expenses`, `participations`,
+  `trip_meta`), RLS de link abierto y `realtime`. Pegar en el SQL Editor de Supabase.
 - `.github/workflows/deploy.yml` — Publica `src/` en GitHub Pages en cada push a `main`.
 - `netlify.toml` — Config alternativa (publish=`src`) por si se quiere usar Netlify.
 - `package.json` — Metadatos + script `dev`. Supabase se carga por CDN (sin npm).
@@ -44,9 +47,9 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
 {
   tripName: string,                 // título editable del paseo (default 'Drumcode')
   theme: 'noche'|'limpio'|'calido', // tema visual
-  view: 'tabla'|'cards',            // vista activa
+  view: 'tabla'|'yo',               // 'tabla'=Total · 'yo'=hoja personal (Total es siempre el landing)
   newPerson: string,                // buffer del input "agregar persona"
-  people:   [{ id, name }],
+  people:   [{ id, name, confirmed:boolean }], // confirmed = la persona dio su OK (chulo azul)
   expenses: [{ id, concepto, dia, valor:number, payerId, parts:[personId,...] }]
 }
 ```
@@ -113,6 +116,10 @@ vanilla. Datos de ejemplo = el Excel real del cliente (19 personas, 4 gastos).
 - [x] Subir a GitHub (`jmsoul2/Paseos_Amigos`) y activar GitHub Pages.
 - [x] Tema único Noche.
 - [x] Sincronización en vivo con Supabase (cada chulo = una fila; realtime). Probado OK.
-- [ ] Compartir el link con los amigos.
+- [x] Hoja **Yo** (dashboard personal filtrado por persona; Total siempre el landing).
+- [x] Agregar/editar gasto por **modal** (sin edición directa en celdas); fix de scroll de la matriz.
+- [x] **Confirmar** por persona (chulo azul, sincronizado) + **imagen** de "para quedar en paz" (canvas) al estar todos confirmados.
+- [ ] Compartir el link con los amigos (probar en producción con gente real).
+- [ ] (Opcional) Resetear confirmaciones automáticamente si cambian los números (hoy es manual).
 - [ ] (Opcional) Pulir el descuadre de redondeo de ~3 pesos en transferencias.
 - [ ] (Opcional) Links de pago (Nequi/Daviplata/Bre-B) junto a cada transferencia.

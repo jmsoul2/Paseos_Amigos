@@ -17,17 +17,16 @@
 
   /* ---------- toggles de cabecera ---------- */
   function viewToggle(view) {
-    const btns = [['tabla', 'Tabla'], ['cards', 'Tarjetas']];
+    const btns = [['tabla', 'Total'], ['yo', 'Yo']];
     return '<div style="display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px">' +
       btns.map(([k, l]) =>
-        '<button data-act="view" data-view="' + k + '" style="border:none;cursor:pointer;border-radius:999px;padding:8px 16px;font-weight:600;font-size:13px;background:' +
+        '<button data-act="view" data-view="' + k + '" style="border:none;cursor:pointer;border-radius:999px;padding:8px 18px;font-weight:600;font-size:13px;background:' +
         (view === k ? 'var(--accent)' : 'transparent') + ';color:' + (view === k ? 'var(--accent-fg)' : 'var(--muted)') +
         ';transition:all .2s">' + l + '</button>').join('') +
       '</div>';
   }
   // (Selector de tema retirado: la app usa solo el tema "Noche".)
   function header(s) {
-    const btn = 'cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:9px;padding:7px 13px;font-size:12.5px;font-weight:500';
     return '' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:22px">' +
         '<div style="min-width:260px">' +
@@ -37,11 +36,7 @@
         '</div>' +
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">' +
           viewToggle(s.view) +
-          '<div style="display:flex;gap:8px">' +
-            '<button data-act="share" style="cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:9px;padding:7px 15px;font-size:12.5px;font-weight:700">Compartir</button>' +
-            '<button data-act="load" style="' + btn + '">Cargar ejemplo</button>' +
-            '<button data-act="clear" style="' + btn + '">Vaciar</button>' +
-          '</div>' +
+          '<button data-act="share" style="cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700">Compartir</button>' +
         '</div>' +
       '</div>';
   }
@@ -140,14 +135,6 @@
       '</div>' +
     '</div>';
   }
-  function payerSelect(e, people) {
-    const opts = ['<option value=""' + (e.payerId === '' ? ' selected' : '') + '>— nadie —</option>']
-      .concat(people.map(p => '<option value="' + p.id + '"' + (e.payerId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>'));
-    return '<div style="position:relative;display:flex;align-items:center">' +
-      '<select data-act="payer" data-exp="' + e.id + '" style="width:100%;background:var(--inset);border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:7px 26px 7px 10px;outline:none;font-size:13px;font-weight:600;cursor:pointer">' + opts.join('') + '</select>' +
-      '<span style="position:absolute;right:9px;pointer-events:none;color:var(--muted);font-size:9px">▼</span>' +
-    '</div>';
-  }
   function matrixCell(e, p) {
     const active = e.parts.includes(p.id);
     const isPayer = e.payerId === p.id;
@@ -162,6 +149,14 @@
       '</button>' +
     '</td>';
   }
+  // Chulo de "confirmar" (azul) arriba del nombre: la persona da el OK a sus gastos.
+  function confirmDot(p) {
+    const on = !!p.confirmed;
+    return '<button data-act="confirm" data-id="' + p.id + '" title="' + (on ? 'Confirmado — toca para deshacer' : 'Confirmar mis gastos') +
+      '" style="position:absolute;top:7px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;cursor:pointer;line-height:1;padding:0;border:2px solid ' +
+      (on ? 'var(--confirm)' : 'var(--line)') + ';background:' + (on ? 'var(--confirm)' : 'transparent') +
+      ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">' + (on ? '✓' : '') + '</button>';
+  }
   function matrix(s, owed, total) {
     const people = s.people;
     const thLbl = 'vertical-align:bottom;padding:12px 12px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)';
@@ -172,7 +167,8 @@
         '<th style="' + thLbl + ';text-align:right;min-width:120px">Valor</th>' +
         '<th style="' + thLbl + ';min-width:130px">Pagó</th>' +
         people.map(p =>
-          '<th style="background:var(--panel);border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:0;vertical-align:bottom;height:118px">' +
+          '<th style="position:relative;background:var(--panel);border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:0;vertical-align:bottom;height:118px">' +
+            confirmDot(p) +
             '<div style="width:46px;height:118px;display:flex;align-items:flex-end;justify-content:center;overflow:visible">' +
               '<span style="display:inline-block;transform:rotate(-45deg);transform-origin:center;white-space:nowrap;font-size:12.5px;font-weight:600;margin-bottom:30px">' + esc(p.name) + '</span>' +
             '</div>' +
@@ -183,23 +179,17 @@
     const body = '<tbody>' + s.expenses.map(e => {
       const parts = e.parts.filter(pid => people.some(p => p.id === pid));
       const perHead = parts.length > 0 ? fmt((Number(e.valor) || 0) / parts.length) : '—';
+      const payerName = (people.find(p => p.id === e.payerId) || {}).name || '— nadie —';
       return '<tr>' +
-        '<td style="position:sticky;left:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:6px 12px;min-width:200px">' +
-          '<div style="display:flex;align-items:center;gap:7px">' +
-            '<button data-act="removeExpense" data-exp="' + e.id + '" title="Eliminar gasto" style="cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:15px;line-height:1;flex:none;width:16px">×</button>' +
-            '<input id="c-' + e.id + '" data-act="concepto" data-exp="' + e.id + '" value="' + esc(e.concepto) + '" placeholder="¿Qué fue?" style="flex:1;background:transparent;border:none;color:var(--fg);outline:none;font-weight:600;font-size:14.5px;font-family:var(--font-head);min-width:0" />' +
-          '</div>' +
+        '<td style="position:sticky;left:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;min-width:200px">' +
+          '<button data-act="editExpense" data-exp="' + e.id + '" title="Editar gasto" style="cursor:pointer;width:100%;text-align:left;border:none;background:transparent;color:var(--fg);padding:11px 12px;display:flex;align-items:center;gap:8px;font-family:var(--font-head)">' +
+            '<span style="font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0' + (e.concepto ? '' : ';color:var(--muted)') + '">' + esc(e.concepto || 'Sin nombre') + '</span>' +
+            '<span style="margin-left:auto;color:var(--muted);font-size:12px;flex:none">✎</span>' +
+          '</button>' +
         '</td>' +
-        '<td style="border-bottom:1px solid var(--line);padding:6px 10px">' +
-          '<input id="d-' + e.id + '" data-act="dia" data-exp="' + e.id + '" value="' + esc(e.dia) + '" list="dias-list" placeholder="Día" style="width:98px;background:var(--inset);border:1px solid var(--line);border-radius:8px;color:var(--fg);padding:7px 10px;outline:none;font-size:13px;font-weight:500" />' +
-        '</td>' +
-        '<td style="border-bottom:1px solid var(--line);padding:6px 10px">' +
-          '<div style="display:flex;align-items:center;gap:3px;background:var(--inset);border:1px solid var(--line);border-radius:8px;padding:5px 9px">' +
-            '<span style="color:var(--muted);font-family:var(--font-num);font-size:13px">$</span>' +
-            '<input id="v-' + e.id + '" data-act="valor" data-exp="' + e.id + '" value="' + (e.valor === 0 ? '' : e.valor) + '" type="number" inputmode="numeric" placeholder="0" style="width:84px;background:transparent;border:none;color:var(--fg);outline:none;font-family:var(--font-num);font-weight:700;font-size:14px;text-align:right" />' +
-          '</div>' +
-        '</td>' +
-        '<td style="border-bottom:1px solid var(--line);padding:6px 10px">' + payerSelect(e, people) + '</td>' +
+        '<td style="border-bottom:1px solid var(--line);padding:11px 12px;font-size:13px;color:var(--muted);white-space:nowrap">' + (esc(e.dia) || '—') + '</td>' +
+        '<td style="border-bottom:1px solid var(--line);padding:11px 12px;text-align:right;font-family:var(--font-num);font-weight:700;font-size:14px;white-space:nowrap">' + (e.valor ? fmt(e.valor) : '—') + '</td>' +
+        '<td style="border-bottom:1px solid var(--line);padding:11px 12px;font-size:13px;font-weight:600;white-space:nowrap">' + esc(payerName) + '</td>' +
         people.map(p => matrixCell(e, p)).join('') +
         '<td style="border-bottom:1px solid var(--line);border-left:1px solid var(--line);padding:6px 12px;text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px;white-space:nowrap">' + perHead + '</td>' +
       '</tr>';
@@ -220,6 +210,20 @@
     '</div>';
   }
   function tablaView(s, derived) {
+    const confirmedN = s.people.filter(p => p.confirmed).length;
+    const allConfirmed = s.people.length > 0 && confirmedN === s.people.length;
+    const canDownload = allConfirmed && derived.transfers.length > 0;
+    const settleFooter =
+      '<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">' +
+        '<div style="font-size:12.5px;margin-bottom:10px;color:' + (allConfirmed ? 'var(--confirm)' : 'var(--muted)') + ';font-weight:' + (allConfirmed ? '700' : '400') + '">' +
+          (allConfirmed ? '✓ Todos confirmaron — listos para pagar' : 'Confirmaron ' + confirmedN + ' de ' + s.people.length) +
+        '</div>' +
+        '<button data-act="downloadSettlement"' + (canDownload ? '' : ' disabled') +
+          ' style="width:100%;border:none;border-radius:10px;padding:12px;font-size:13.5px;font-weight:700;cursor:' + (canDownload ? 'pointer' : 'not-allowed') +
+          ';background:' + (canDownload ? 'var(--confirm)' : 'var(--inset)') + ';color:' + (canDownload ? '#fff' : 'var(--muted)') + '">' +
+          (allConfirmed ? '⬇ Descargar imagen para pagar' : 'Descargar (faltan ' + (s.people.length - confirmedN) + ')') +
+        '</button>' +
+      '</div>';
     const summary =
       '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:22px;align-items:flex-start">' +
         '<div style="flex:2 1 460px;min-width:300px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 22px">' +
@@ -233,6 +237,7 @@
           '<div style="font-family:var(--font-head);font-weight:700;font-size:18px;margin-bottom:4px">Para quedar en paz</div>' +
           '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">El mínimo de transferencias.</div>' +
           transfersBody(derived.transfers, s.expenses) +
+          settleFooter +
         '</div>' +
       '</div>';
     return '<div>' +
@@ -240,84 +245,119 @@
       matrix(s, derived.owed, derived.total) +
       '<div style="margin-top:12px"><button data-act="addExpense" style="cursor:pointer;border:1px dashed var(--line);background:transparent;color:var(--accent);border-radius:10px;padding:10px 18px;font-weight:600;font-size:14px;width:100%">+ Agregar gasto</button></div>' +
       summary +
+      '<div style="margin-top:36px;text-align:center">' +
+        '<button data-act="clear" style="cursor:pointer;border:none;background:transparent;color:var(--muted);opacity:.55;font-size:12px;text-decoration:underline;padding:6px 10px">Vaciar todo</button>' +
+      '</div>' +
     '</div>';
   }
 
-  /* ---------- vista TARJETAS ---------- */
-  function expenseCard(e, people) {
-    const parts = e.parts.filter(pid => people.some(p => p.id === pid));
-    const perHead = parts.length > 0 ? fmt((Number(e.valor) || 0) / parts.length) : '—';
-    const chips = people.map(p => {
-      const active = e.parts.includes(p.id);
-      return '<button data-act="toggle" data-exp="' + e.id + '" data-person="' + p.id + '" style="cursor:pointer;border:1px solid ' +
-        (active ? 'var(--accent)' : 'var(--line)') + ';background:' + (active ? 'var(--accent)' : 'transparent') + ';color:' +
-        (active ? 'var(--accent-fg)' : 'var(--muted)') + ';border-radius:999px;padding:7px 14px;font-size:13px;font-weight:500;transition:all .15s">' + esc(p.name) + '</button>';
-    }).join('');
-    return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 20px">' +
-      '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:14px">' +
-        '<input id="c-' + e.id + '" data-act="concepto" data-exp="' + e.id + '" value="' + esc(e.concepto) + '" placeholder="¿Qué fue?" style="flex:1;background:transparent;border:none;border-bottom:1px solid var(--line);color:var(--fg);padding:6px 2px;outline:none;font-weight:600;font-size:16px;font-family:var(--font-head)" />' +
-        '<div style="display:flex;align-items:center;gap:4px;background:var(--inset);border:1px solid var(--line);border-radius:10px;padding:6px 12px">' +
-          '<span style="color:var(--muted);font-family:var(--font-num)">$</span>' +
-          '<input id="v-' + e.id + '" data-act="valor" data-exp="' + e.id + '" value="' + (e.valor === 0 ? '' : e.valor) + '" type="number" inputmode="numeric" placeholder="0" style="width:108px;background:transparent;border:none;color:var(--fg);outline:none;font-family:var(--font-num);font-weight:700;font-size:16px;text-align:right" />' +
-        '</div>' +
-        '<button data-act="removeExpense" data-exp="' + e.id + '" style="cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:9px;width:36px;height:36px;font-size:16px;flex:none">×</button>' +
-      '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:14px">' +
-        '<div style="display:flex;align-items:center;gap:9px"><span style="font-size:13px;color:var(--muted)">Día</span>' +
-          '<input id="d-' + e.id + '" data-act="dia" data-exp="' + e.id + '" value="' + esc(e.dia) + '" list="dias-list" placeholder="—" style="width:120px;background:var(--inset);border:1px solid var(--line);border-radius:9px;color:var(--fg);padding:8px 12px;outline:none;font-size:13.5px;font-weight:600" /></div>' +
-        '<div style="display:flex;align-items:center;gap:9px"><span style="font-size:13px;color:var(--muted)">Pagó</span>' + payerSelect(e, people) + '</div>' +
-        '<div style="display:flex;align-items:center;gap:7px;margin-left:auto;font-size:13px;color:var(--muted)">' +
-          '<span style="font-family:var(--font-num);color:var(--fg);font-weight:700">' + perHead + '</span><span>x cabeza ·</span><span>' + parts.length + ' pers.</span>' +
-        '</div>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">' +
-        '<span style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Participaron</span>' +
-        '<button data-act="all" data-exp="' + e.id + '" style="cursor:pointer;border:none;background:transparent;color:var(--accent);font-size:12px;font-weight:600;padding:2px 4px">Todos</button>' +
-        '<button data-act="none" data-exp="' + e.id + '" style="cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:600;padding:2px 4px">Nadie</button>' +
-      '</div>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:7px">' + chips + '</div>' +
+  /* ---------- vista YO (hoja personal: filtra una persona) ----------
+     Comparte el MISMO estado que el Total: marcar un chulo aquí llama a la
+     misma toggleParticipation → se refleja en la tabla y en el sync al instante.
+     La persona elegida vive solo en memoria (el Total es siempre el landing). */
+  let yoId = null;
+  function yoPicker(people) {
+    const grid = people.length === 0
+      ? '<div style="color:var(--muted);font-size:14px">Aún no hay personas. Agrégalas en la vista Total.</div>'
+      : '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">' +
+          people.map(p =>
+            '<button data-act="yoPick" data-id="' + p.id + '" style="cursor:pointer;display:flex;align-items:center;gap:10px;background:var(--inset);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--fg);text-align:left">' +
+              avatar(C.initials(p.name), 32) +
+              '<span style="font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(p.name) + '</span>' +
+            '</button>').join('') +
+        '</div>';
+    return '<div style="max-width:640px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px 24px">' +
+      '<div style="font-family:var(--font-head);font-weight:700;font-size:22px;margin-bottom:5px">¿Quién eres?</div>' +
+      '<div style="color:var(--muted);font-size:14px;margin-bottom:20px">Elige tu nombre para ver y marcar solo lo tuyo. Lo que cambies aquí se ve en el Total al instante.</div>' +
+      grid +
     '</div>';
   }
-  function cardsView(s, derived) {
-    const left =
-      '<div style="flex:3 1 520px;min-width:320px;display:flex;flex-direction:column;gap:20px">' +
-        '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 22px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-            '<div style="font-family:var(--font-head);font-weight:700;font-size:18px">Personas</div>' +
-            '<div style="font-size:12.5px;color:var(--muted)">' + s.people.length + ' en el paseo</div>' +
-          '</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">' +
-            s.people.map(p =>
-              '<div style="display:flex;align-items:center;gap:8px;background:var(--inset);border:1px solid var(--line);border-radius:999px;padding:6px 8px 6px 13px">' +
-                '<span style="font-weight:500;font-size:13.5px">' + esc(p.name) + '</span>' +
-                '<button data-act="removePerson" data-id="' + p.id + '" style="cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:16px;line-height:1;width:18px;height:18px;display:flex;align-items:center;justify-content:center">×</button>' +
-              '</div>').join('') +
-          '</div>' +
-          '<div style="display:flex;gap:8px">' +
-            '<input id="new-person" data-act="newPerson" value="' + esc(s.newPerson) + '" placeholder="Agregar persona…" style="flex:1;background:var(--inset);border:1px solid var(--line);border-radius:10px;color:var(--fg);padding:10px 13px;outline:none;font-size:14px" />' +
-            '<button data-act="addPerson" style="cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:10px;padding:10px 18px;font-weight:600;font-size:14px">Agregar</button>' +
-          '</div>' +
+  function yoDashboard(s, derived, me) {
+    const myNet = derived.net[me.id] || 0;
+    const paid = s.expenses.reduce((a, e) => a + (e.payerId === me.id ? (Number(e.valor) || 0) : 0), 0);
+    const owed = derived.owed[me.id] || 0;
+    const bd = balanceData({ name: me.name, net: myNet });
+    const myTransfers = derived.transfers.filter(t => t.from === me.name || t.to === me.name);
+    const inCount = s.expenses.filter(e => e.parts.includes(me.id)).length;
+
+    const chip =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">' +
+        '<div style="display:flex;align-items:center;gap:11px">' + avatar(C.initials(me.name), 38) +
+          '<div><div style="font-family:var(--font-head);font-weight:700;font-size:20px">' + esc(me.name) + '</div>' +
+          '<div style="font-size:12.5px;color:var(--muted)">Tu vista personal · marca lo que consumiste</div></div>' +
         '</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-          '<div style="font-family:var(--font-head);font-weight:700;font-size:18px">Gastos</div>' +
-          '<button data-act="addExpense" style="cursor:pointer;border:1px dashed var(--line);background:transparent;color:var(--accent);border-radius:10px;padding:9px 16px;font-weight:600;font-size:14px">+ Nuevo gasto</button>' +
-        '</div>' +
-        s.expenses.map(e => expenseCard(e, s.people)).join('') +
+        '<button data-act="yoClear" style="cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:9px;padding:8px 14px;font-size:13px;font-weight:600">Cambiar persona</button>' +
       '</div>';
-    const right =
-      '<div style="flex:1 1 320px;min-width:300px;max-width:400px;position:sticky;top:20px;display:flex;flex-direction:column;gap:16px">' +
-        '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 22px">' +
-          '<div style="font-family:var(--font-head);font-weight:700;font-size:18px;margin-bottom:4px">Saldos</div>' +
-          '<div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Cuánto puso y cuánto le toca a cada uno.</div>' +
-          '<div style="display:flex;flex-direction:column;gap:2px">' + derived.balances.map(balanceListRow).join('') + '</div>' +
-        '</div>' +
-        '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 22px">' +
-          '<div style="font-family:var(--font-head);font-weight:700;font-size:18px;margin-bottom:4px">Para quedar en paz</div>' +
-          '<div style="font-size:12.5px;color:var(--muted);margin-bottom:14px">El mínimo de transferencias para saldar todo.</div>' +
-          transfersBody(derived.transfers, s.expenses) +
+
+    const balCard =
+      '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:16px">' +
+        '<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px">Tu saldo</div>' +
+        '<div style="font-family:var(--font-num);font-weight:700;font-size:34px;color:' + bd.color + '">' + bd.amountFmt + '</div>' +
+        '<div style="font-size:13.5px;color:var(--muted);margin-top:4px">' + (Math.abs(myNet) < 1 ? 'Estás en paz 🎉' : (myNet > 0 ? 'Te deben en total' : 'Debes en total')) + '</div>' +
+        '<div style="display:flex;gap:26px;margin-top:16px;flex-wrap:wrap">' +
+          '<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Pusiste</div><div style="font-family:var(--font-num);font-weight:700;font-size:17px">' + fmt(paid) + '</div></div>' +
+          '<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px">Te toca</div><div style="font-family:var(--font-num);font-weight:700;font-size:17px">' + fmt(owed) + '</div></div>' +
         '</div>' +
       '</div>';
-    return '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">' + left + right + '</div>';
+
+    const transRows = myTransfers.map(t => {
+      const youPay = t.from === me.name;
+      const other = youPay ? t.to : t.from;
+      return '<div style="display:flex;align-items:center;gap:9px;background:var(--inset);border:1px solid var(--line);border-radius:12px;padding:11px 13px">' +
+        '<span style="font-weight:700;font-size:12.5px;color:' + (youPay ? 'var(--neg)' : 'var(--pos)') + '">' + (youPay ? 'Le pagas a' : 'Te paga') + '</span>' +
+        '<span style="font-weight:600;font-size:13.5px">' + esc(other) + '</span>' +
+        '<span style="margin-left:auto;font-family:var(--font-num);font-weight:700;font-size:14px;color:var(--accent)">' + fmt(t.amount) + '</span>' +
+      '</div>';
+    }).join('');
+    const transCard =
+      '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px 22px;margin-bottom:16px">' +
+        '<div style="font-family:var(--font-head);font-weight:700;font-size:17px;margin-bottom:' + (myTransfers.length ? '14px' : '6px') + '">Para quedar en paz</div>' +
+        (myTransfers.length
+          ? '<div style="display:flex;flex-direction:column;gap:9px">' + transRows + '</div>'
+          : '<div style="color:var(--muted);font-size:13.5px">' + (Math.abs(myNet) < 1 ? 'No debes ni te deben nada.' : 'Sin transferencias por ahora.') + '</div>') +
+      '</div>';
+
+    const expRows = s.expenses.map(e => {
+      const inIt = e.parts.includes(me.id);
+      const partsN = e.parts.filter(pid => s.people.some(p => p.id === pid)).length;
+      const share = inIt && partsN > 0 ? fmt((Number(e.valor) || 0) / partsN) : '—';
+      const iPaid = e.payerId === me.id;
+      const payerTxt = iPaid ? '<span style="color:var(--accent);font-weight:700">Pagaste tú</span>'
+        : ('Pagó ' + esc((s.people.find(p => p.id === e.payerId) || {}).name || '—'));
+      return '<button data-act="toggle" data-exp="' + e.id + '" data-person="' + me.id + '" style="cursor:pointer;width:100%;text-align:left;display:flex;align-items:center;gap:13px;background:' +
+          (inIt ? 'var(--inset)' : 'transparent') + ';border:1px solid ' + (inIt ? 'var(--accent)' : 'var(--line)') + ';border-radius:14px;padding:14px 15px;transition:background .12s,border-color .12s">' +
+        '<span style="flex:none;width:28px;height:28px;border-radius:50%;border:2px solid ' + (inIt ? 'var(--accent)' : 'var(--line)') + ';background:' + (inIt ? 'var(--accent)' : 'transparent') + ';color:var(--accent-fg);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700">' + (inIt ? '✓' : '') + '</span>' +
+        '<span style="flex:1;min-width:0">' +
+          '<span style="display:block;font-family:var(--font-head);font-weight:600;font-size:15px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(e.concepto || 'Sin nombre') + '</span>' +
+          '<span style="display:block;font-size:12.5px;color:var(--muted);margin-top:3px">' + (e.dia ? esc(e.dia) + ' · ' : '') + payerTxt + ' · ' + (e.valor ? fmt(e.valor) : '—') + '</span>' +
+        '</span>' +
+        '<span style="flex:none;text-align:right;font-family:var(--font-num);font-weight:700;font-size:14px;color:' + (inIt ? 'var(--neg)' : 'var(--muted)') + '">' + (inIt ? '−' + share : '—') + '</span>' +
+      '</button>';
+    }).join('');
+    const expCard =
+      '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:16px">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
+          '<div style="font-family:var(--font-head);font-weight:700;font-size:17px">Gastos que participé</div>' +
+          '<div style="font-size:12.5px;color:var(--muted)">Marcaste ' + inCount + ' de ' + s.expenses.length + '</div>' +
+        '</div>' +
+        (s.expenses.length
+          ? '<div style="display:flex;flex-direction:column;gap:9px">' + expRows + '</div>'
+          : '<div style="color:var(--muted);font-size:13.5px">Aún no hay gastos. Agrégalos en la vista Total.</div>') +
+      '</div>';
+
+    const on = !!me.confirmed;
+    const confirmBanner =
+      '<button data-act="confirm" data-id="' + me.id + '" style="width:100%;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;border-radius:14px;padding:14px;margin-bottom:16px;font-size:14.5px;font-weight:700;border:1px solid var(--confirm);background:' +
+        (on ? 'var(--confirm)' : 'transparent') + ';color:' + (on ? '#fff' : 'var(--confirm)') + '">' +
+        '<span style="width:22px;height:22px;border-radius:50%;border:2px solid ' + (on ? '#fff' : 'var(--confirm)') + ';display:flex;align-items:center;justify-content:center;font-size:13px">' + (on ? '✓' : '') + '</span>' +
+        (on ? 'Confirmado · toca para deshacer' : 'Revisé mis gastos — Confirmar') +
+      '</button>';
+    return '<div style="max-width:640px;margin:0 auto">' + chip + confirmBanner + balCard + expCard + transCard + '</div>';
+  }
+  function yoView(s, derived) {
+    const me = yoId ? s.people.find(p => p.id === yoId) : null;
+    if (!me) { yoId = null; return yoPicker(s.people); }
+    return yoDashboard(s, derived, me);
   }
 
   /* ---------- render ---------- */
@@ -335,8 +375,9 @@
     return '<div style="' + vars + ';min-height:100vh;background:var(--bg);color:var(--fg);font-family:var(--font-body);padding:30px 22px 70px;transition:background .35s ease,color .35s ease">' +
       '<div style="max-width:1240px;margin:0 auto">' +
         header(s) +
-        statsBand(derived.total, s.people, s.expenses) +
-        (s.view === 'cards' ? cardsView(s, derived) : tablaView(s, derived)) +
+        (s.view === 'yo'
+          ? yoView(s, derived)
+          : statsBand(derived.total, s.people, s.expenses) + tablaView(s, derived)) +
       '</div>' +
     '</div>';
   }
@@ -346,20 +387,179 @@
     const aid = a && a.id ? a.id : null;
     let ss = null, se = null;
     if (aid) { try { ss = a.selectionStart; se = a.selectionEnd; } catch (e) {} }
+    // Guardar el scroll de la matriz: al marcar un chulo se reconstruye todo el HTML
+    // y el contenedor nuevo arrancaría en 0 (rebote a la izquierda en el celular).
+    const prevMatrix = root.querySelector('.matrix-scroll');
+    const mx = prevMatrix ? prevMatrix.scrollLeft : 0;
+    const my = prevMatrix ? prevMatrix.scrollTop : 0;
     root.innerHTML = template(s);
     document.body.style.background = (C.THEMES[s.theme] || C.THEMES.noche)['--bg'];
     if (aid) {
       const el = document.getElementById(aid);
-      if (el) { el.focus(); if (ss != null) { try { el.setSelectionRange(ss, se); } catch (e) {} } }
+      // preventScroll: no dejar que el foco recolocado mueva la matriz por su cuenta.
+      if (el) { el.focus({ preventScroll: true }); if (ss != null) { try { el.setSelectionRange(ss, se); } catch (e) {} } }
     }
+    // Restaurar el scroll al final para que gane sobre cualquier ajuste del foco.
+    const nextMatrix = root.querySelector('.matrix-scroll');
+    if (nextMatrix) { nextMatrix.scrollLeft = mx; nextMatrix.scrollTop = my; }
   }
 
   /* ---------- compartir ---------- */
   function onShare() {
     const text = C.buildSummary();
-    if (navigator.share) { navigator.share({ title: 'Cuentas del paseo', text }).catch(() => {}); return; }
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); }
-    catch (e) { try { navigator.clipboard.writeText(text); alert('Resumen copiado al portapapeles.'); } catch (_) {} }
+    // Plan B: WhatsApp Web; y si eso falla, portapapeles. Sirve en compu donde
+    // navigator.share no existe o falla en silencio.
+    const fallback = () => {
+      try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); }
+      catch (e) { try { navigator.clipboard.writeText(text); alert('Resumen copiado al portapapeles.'); } catch (_) {} }
+    };
+    if (navigator.share) {
+      navigator.share({ title: 'Cuentas del paseo', text }).catch((err) => {
+        if (err && err.name === 'AbortError') return; // el usuario canceló a propósito
+        fallback();
+      });
+      return;
+    }
+    fallback();
+  }
+
+  /* ---------- formulario de gasto (modal) ----------
+     Vive FUERA de #app: así los re-render (locales o remotos) no lo borran
+     mientras se escribe. Lleva las variables del tema en el overlay. */
+  const themeVars = () => { const t = C.THEMES.noche; return Object.keys(t).map(k => k + ':' + t[k]).join(';'); };
+  let modalRoot = null;
+  function closeExpenseForm() { if (modalRoot) modalRoot.innerHTML = ''; }
+  function openExpenseForm(id) {
+    if (!modalRoot) { modalRoot = document.createElement('div'); document.body.appendChild(modalRoot); }
+    const s = C.getState();
+    const exp = id ? s.expenses.find(e => e.id === id) : null;
+    const isNew = !exp;
+    const inS = 'width:100%;background:var(--inset);border:1px solid var(--line);border-radius:10px;color:var(--fg);padding:11px 13px;outline:none;font-size:15px;font-family:var(--font-body)';
+    const lbl = 'display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px';
+    const payerOpts = ['<option value="">— nadie —</option>'].concat(
+      s.people.map(p => '<option value="' + p.id + '"' + (exp && exp.payerId === p.id ? ' selected' : '') + '>' + esc(p.name) + '</option>')
+    ).join('');
+    modalRoot.innerHTML =
+      '<div data-overlay style="' + themeVars() + ';position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px;font-family:var(--font-body)">' +
+        '<div data-panel style="width:min(440px,100%);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px 22px 20px;color:var(--fg);box-shadow:0 18px 50px rgba(0,0,0,.5)">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">' +
+            '<div style="font-family:var(--font-head);font-weight:700;font-size:20px">' + (isNew ? 'Nuevo gasto' : 'Editar gasto') + '</div>' +
+            '<button data-close style="cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:22px;line-height:1;width:30px;height:30px">×</button>' +
+          '</div>' +
+          '<label style="display:block;margin-bottom:14px"><span style="' + lbl + '">¿Qué fue?</span>' +
+            '<input id="mf-concepto" value="' + esc(exp ? exp.concepto : '') + '" placeholder="Ej: Cervezas, Van, Mercado…" style="' + inS + '" /></label>' +
+          '<div style="display:flex;gap:12px;margin-bottom:14px">' +
+            '<label style="flex:1"><span style="' + lbl + '">Día</span>' +
+              '<input id="mf-dia" value="' + esc(exp ? exp.dia : '') + '" list="dias-list" placeholder="—" style="' + inS + '" /></label>' +
+            '<label style="flex:1"><span style="' + lbl + '">Monto</span>' +
+              '<input id="mf-valor" type="number" inputmode="numeric" value="' + (exp && exp.valor ? exp.valor : '') + '" placeholder="0" style="' + inS + ';font-family:var(--font-num);font-weight:700" /></label>' +
+          '</div>' +
+          '<label style="display:block;margin-bottom:22px"><span style="' + lbl + '">¿Quién pagó?</span>' +
+            '<select id="mf-payer" style="' + inS + ';font-weight:600;cursor:pointer">' + payerOpts + '</select></label>' +
+          '<div style="display:flex;gap:10px">' +
+            '<button data-cancel style="flex:1;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:10px;padding:12px;font-size:14px;font-weight:600">Cancelar</button>' +
+            '<button data-save style="flex:1;cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:10px;padding:12px;font-size:14px;font-weight:700">Guardar</button>' +
+          '</div>' +
+          (isNew ? '' :
+            '<button data-delete style="width:100%;margin-top:12px;cursor:pointer;border:none;background:transparent;color:var(--neg);border-radius:10px;padding:10px;font-size:13px;font-weight:600">Eliminar gasto</button>') +
+        '</div>' +
+      '</div>';
+
+    const overlay = modalRoot.firstElementChild;
+    const panel = overlay.querySelector('[data-panel]');
+    const save = () => {
+      const concepto = panel.querySelector('#mf-concepto').value.trim();
+      const dia = panel.querySelector('#mf-dia').value.trim();
+      const vRaw = panel.querySelector('#mf-valor').value;
+      const valor = vRaw === '' ? 0 : Math.max(0, Math.round(Number(vRaw) || 0));
+      const payerId = panel.querySelector('#mf-payer').value;
+      if (isNew && !concepto && !valor) { panel.querySelector('#mf-concepto').focus(); return; }
+      closeExpenseForm();
+      if (isNew) C.addExpense({ concepto, dia, valor, payerId });
+      else C.updateExpense(id, { concepto, dia, valor, payerId });
+    };
+    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) closeExpenseForm(); });
+    panel.querySelector('[data-close]').addEventListener('click', closeExpenseForm);
+    panel.querySelector('[data-cancel]').addEventListener('click', closeExpenseForm);
+    panel.querySelector('[data-save]').addEventListener('click', save);
+    const del = panel.querySelector('[data-delete]');
+    if (del) del.addEventListener('click', () => { if (confirm('¿Eliminar este gasto?')) { closeExpenseForm(); C.removeExpense(id); } });
+    panel.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); closeExpenseForm(); }
+      else if (ev.key === 'Enter' && ev.target.tagName !== 'SELECT') { ev.preventDefault(); save(); }
+    });
+    const first = panel.querySelector('#mf-concepto');
+    if (first) first.focus();
+  }
+
+  /* ---------- imagen "Para quedar en paz" (canvas, sin librerías) ---------- */
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  async function downloadSettlement() {
+    const s = C.getState();
+    const net = C.computeNets(s.people, s.expenses);
+    const transfers = C.computeTransfers(s.people, net);
+    const total = s.expenses.reduce((a, e) => a + (Number(e.valor) || 0), 0);
+    try { await document.fonts.ready; } catch (e) {}
+    const W = 720, padX = 44, rowH = 56, startY = 188;
+    const H = startY + Math.max(transfers.length, 1) * rowH + 56;
+    const sc = 2;
+    const cv = document.createElement('canvas');
+    cv.width = W * sc; cv.height = H * sc;
+    const ctx = cv.getContext('2d');
+    ctx.scale(sc, sc);
+    ctx.fillStyle = '#0a0a0c'; ctx.fillRect(0, 0, W, H);
+    roundRect(ctx, 18, 18, W - 36, H - 36, 26); ctx.fillStyle = '#141319'; ctx.fill();
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#c2f24a'; ctx.font = '700 13px "Space Mono", monospace';
+    ctx.fillText('CUENTAS DEL PASEO', padX, 66);
+    ctx.fillStyle = '#f4f4f6'; ctx.font = '700 34px "Space Grotesk", sans-serif';
+    ctx.fillText('Para quedar en paz', padX, 106);
+    ctx.fillStyle = '#8c8b98'; ctx.font = '500 15px "Space Grotesk", sans-serif';
+    ctx.fillText((s.tripName || 'Paseo') + '  ·  Total ' + C.fmt(total), padX, 134);
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padX, 158); ctx.lineTo(W - padX, 158); ctx.stroke();
+    ctx.textBaseline = 'middle';
+    if (transfers.length === 0) {
+      ctx.fillStyle = '#65e6a1'; ctx.font = '600 18px "Space Grotesk", sans-serif';
+      ctx.fillText('¡Todo saldado! Nadie debe nada.', padX, startY + 12);
+    } else {
+      transfers.forEach((t, i) => {
+        const top = startY + i * rowH, cy = top + 21;
+        roundRect(ctx, padX, top, W - 2 * padX, 44, 12); ctx.fillStyle = '#1d1c25'; ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#f4f4f6'; ctx.font = '600 17px "Space Grotesk", sans-serif';
+        const fromW = ctx.measureText(t.from).width;
+        ctx.fillText(t.from, padX + 18, cy);
+        ctx.fillStyle = '#c2f24a'; ctx.fillText('→', padX + 18 + fromW + 12, cy);
+        const arrW = ctx.measureText('→').width;
+        ctx.fillStyle = '#f4f4f6'; ctx.fillText(t.to, padX + 18 + fromW + 12 + arrW + 12, cy);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#c2f24a'; ctx.font = '700 17px "Space Mono", monospace';
+        ctx.fillText(C.fmt(t.amount), W - padX - 18, cy);
+      });
+    }
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#8c8b98'; ctx.font = '500 12px "Space Grotesk", sans-serif';
+    ctx.fillText('Todos confirmaron ✓ · a pagar', padX, H - 30);
+    cv.toBlob(async (blob) => {
+      if (!blob) return;
+      const file = new File([blob], 'para-quedar-en-paz.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Para quedar en paz' }); return; } catch (e) {}
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'para-quedar-en-paz.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }, 'image/png');
   }
 
   /* ---------- eventos (delegación en #app, sobrevive a los re-render) ---------- */
@@ -369,12 +569,16 @@
     const act = el.dataset.act, exp = el.dataset.exp, id = el.dataset.id;
     switch (act) {
       case 'view': C.setView(el.dataset.view); break;
+      case 'yoPick': yoId = id; render(); break;
+      case 'yoClear': yoId = null; render(); break;
       case 'share': onShare(); break;
-      case 'load': if (confirm('¿Cargar el ejemplo? Reemplaza lo que tengas ahora.')) C.loadExample(); break;
+      case 'confirm': C.toggleConfirm(id); break;
+      case 'downloadSettlement': downloadSettlement(); break;
       case 'clear': if (confirm('¿Vaciar todo? Se borran todas las personas y gastos.')) C.clearAll(); break;
       case 'addPerson': C.addPerson(); break;
-      case 'removePerson': C.removePerson(id); break;
-      case 'addExpense': C.addExpense(); break;
+      case 'removePerson': if (confirm('¿Quitar a esta persona? Se borran sus chulos.')) C.removePerson(id); break;
+      case 'addExpense': openExpenseForm(null); break;
+      case 'editExpense': openExpenseForm(exp); break;
       case 'removeExpense': C.removeExpense(exp); break;
       case 'toggle': C.toggleParticipation(exp, el.dataset.person); break;
       case 'all': C.setAll(exp); break;
