@@ -487,17 +487,33 @@
     const out = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
     return Array.isArray(out) ? out[0] : out;
   }
+  // Fallback universal cuando createImageBitmap no existe/falla (iOS viejo).
+  function fileToImage(blob) {
+    return new Promise((res, rej) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => { URL.revokeObjectURL(url); res(img); };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('no carga la imagen')); };
+      img.src = url;
+    });
+  }
   async function compressImage(file, maxSide, quality) {
     maxSide = maxSide || 1600; quality = quality || 0.82;
     const src = isHeic(file) ? await heicToJpeg(file) : file;
-    let bmp;
-    try { bmp = await createImageBitmap(src, { imageOrientation: 'from-image' }); }
-    catch (e) { bmp = await createImageBitmap(src); } // navegador viejo: sin corrección EXIF
-    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    // Pixeles + tamaño: preferir createImageBitmap; si falla, usar <img>.
+    let drawable, w0, h0, bmp = null;
+    try {
+      bmp = await createImageBitmap(src, { imageOrientation: 'from-image' });
+      drawable = bmp; w0 = bmp.width; h0 = bmp.height;
+    } catch (e) {
+      const img = await fileToImage(src);
+      drawable = img; w0 = img.naturalWidth; h0 = img.naturalHeight;
+    }
+    const scale = Math.min(1, maxSide / Math.max(w0, h0));
+    const w = Math.round(w0 * scale), h = Math.round(h0 * scale);
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-    cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
-    if (bmp.close) bmp.close();
+    cv.getContext('2d').drawImage(drawable, 0, 0, w, h);
+    if (bmp && bmp.close) bmp.close();
     return await new Promise((res, rej) =>
       cv.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/jpeg', quality));
   }
@@ -511,7 +527,13 @@
     for (let k = 0; k < files.length; k++) {
       toast('Procesando foto ' + (k + 1) + ' de ' + files.length + '…', true);
       try {
-        const blob = await compressImage(files[k]);
+        let blob;
+        try { blob = await compressImage(files[k]); }
+        catch (ce) {
+          console.warn('[recuerdos] sin comprimir, subo original', ce);
+          if (isHeic(files[k])) throw ce; // un HEIC crudo no se mostraría en el navegador
+          blob = files[k];                // último recurso: subir el original (en iOS ya es JPEG)
+        }
         const id = C.uid('m');
         const { url, path } = await window.CuentasSync.uploadPhoto(blob, id);
         C.addMemory({ id, url, path, caption: '' }); // emite → render() reconstruye la galería
@@ -519,7 +541,7 @@
         recShow(recIdx);
       } catch (e) {
         console.error('[recuerdos] subir', e);
-        toast('No se pudo subir una foto 😕 (revisa el bucket en Supabase)');
+        toast('No se pudo subir 😕 ' + (e && e.message ? '(' + e.message + ')' : ''));
       }
     }
     toast('¡Listo! 📸');
