@@ -24,19 +24,24 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
     cálculos puros (`computeNets`, `computeOwed`, `computeTransfers`, `buildSummary`),
     temas (`THEMES`), datos de ejemplo, y **API de mutaciones granular**. Cada mutación
     guarda y emite `cuentas:changed` con `{ op, ... }`.
-  - `app.js` — Capa de UI: render de las vistas **Total** (tabla tipo Excel) y **Yo**
-    (hoja personal: se filtra una persona y marca solo lo suyo), tema único Noche.
-    Delegación de eventos en `#app`. Redibuja en `cuentas:changed` y `cuentas:remote-applied`
-    preservando foco/cursor **y el scroll de la matriz**. Agregar/editar gasto = **modal**
-    (vive fuera de `#app` para sobrevivir a los re-render). **Confirmar** = chulo azul por
-    persona; **imagen** de "para quedar en paz" dibujada en `<canvas>` (sin librerías).
-    El título del paseo avisa al sync por `cuentas:field`. Estilos inline 1:1 del handoff.
+  - `app.js` — Capa de UI: render de las vistas **Total** (tabla tipo Excel), **Yo**
+    (hoja personal: se filtra una persona y marca solo lo suyo) y **Recuerdos**
+    (galería slideshow de fotos), tema único Noche. Delegación de eventos en `#app`.
+    Redibuja en `cuentas:changed` y `cuentas:remote-applied` preservando foco/cursor **y
+    el scroll de la matriz**. Agregar/editar gasto = **modal** (vive fuera de `#app` para
+    sobrevivir a los re-render). **Confirmar** = chulo azul por persona; **imagen** de
+    "para quedar en paz" dibujada en `<canvas>` (sin librerías; en compu descarga, en
+    celular comparte). El toggle Compartir baja a la fila de Total/Yo en celular
+    (clase `.header-controls` + media query). El título del paseo avisa al sync por
+    `cuentas:field`. Estilos inline 1:1 del handoff.
   - `sync.js` — Sincronización en vivo con Supabase: carga inicial (+siembra si vacío),
     suscripción realtime → re-fetch → `replaceState` silencioso, y traducción de cada
-    acción a su escritura (chulo = una fila). Pastilla de estado abajo-izquierda.
+    acción a su escritura (chulo = una fila). Maneja también `memories` y el **Storage**
+    de fotos (`window.CuentasSync.uploadPhoto/deletePhoto`). Pastilla de estado abajo-izq.
   - `supabase-config.js` — `url` + `anonKey` (públicos por diseño; la seguridad la da RLS).
 - `supabase/schema.sql` — Tablas (`people` con `confirmed`, `expenses`, `participations`,
-  `trip_meta`), RLS de link abierto y `realtime`. Pegar en el SQL Editor de Supabase.
+  `trip_meta`, `memories`), RLS de link abierto, `realtime` y el **bucket de Storage
+  `recuerdos`** con sus políticas. Pegar en el SQL Editor de Supabase.
 - `.github/workflows/deploy.yml` — Publica `src/` en GitHub Pages en cada push a `main`.
 - `netlify.toml` — Config alternativa (publish=`src`) por si se quiere usar Netlify.
 - `package.json` — Metadatos + script `dev`. Supabase se carga por CDN (sin npm).
@@ -47,10 +52,11 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
 {
   tripName: string,                 // título editable del paseo (default 'Drumcode')
   theme: 'noche'|'limpio'|'calido', // tema visual
-  view: 'tabla'|'yo',               // 'tabla'=Total · 'yo'=hoja personal (Total es siempre el landing)
+  view: 'tabla'|'yo'|'recuerdos',   // 'tabla'=Total · 'yo'=hoja personal · 'recuerdos'=galería (Total es siempre el landing)
   newPerson: string,                // buffer del input "agregar persona"
   people:   [{ id, name, confirmed:boolean }], // confirmed = la persona dio su OK (chulo azul)
-  expenses: [{ id, concepto, dia, valor:number, payerId, parts:[personId,...] }]
+  expenses: [{ id, concepto, dia, valor:number, payerId, parts:[personId,...] }],
+  memories: [{ id, url, path, caption }] // fotos del paseo (archivo en Storage; url+ruta+caption)
 }
 ```
 - **El chulo de una persona en un gasto = su `id` dentro de `expense.parts`.** Esta es
@@ -89,6 +95,23 @@ nunca se pisan, y `realtime` empuja los cambios a todos en vivo.
   (pública por diseño); la seguridad la dan las políticas **RLS**.
 - Proyecto Supabase: `xxtassbprolppqcejxml` (cuenta de Juan).
 
+## Recuerdos (galería de fotos — Fase 1)
+Tercera hoja al lado de Total/Yo: una **galería slideshow** del paseo ("cobro feliz",
+para que no duela tanto pagar). Cada foto = una fila en `memories` + un archivo en el
+**bucket de Storage `recuerdos`** (público; seguridad por RLS de link abierto, igual que el resto).
+- **Subir** (`app.js`): se comprime y se corrige la orientación en el navegador antes de
+  subir (verticales/pesadas → livianas y derechas). **HEIC** (iPhone) se convierte a JPEG
+  con `heic2any` cargado **lazy** (solo cuando aparece un HEIC); el `accept` y el filtro
+  aceptan `.heic/.heif` (en Windows llegan con MIME vacío). La red (Storage) vive en
+  `sync.js` (`window.CuentasSync.uploadPhoto/deletePhoto`); la UI orquesta y llama `addMemory`.
+- **Slideshow**: fade automático (~4.5s) manejado con **DOM directo** (opacidad), no por
+  re-render, para no reconstruir todo cada tick. Se pausa con el mouse encima o al editar
+  el caption. Flechas, miniaturas y contador. Borrar foto = borra fila + archivo de Storage.
+- **Caption** editable por foto (para molestar): sincronizado **debounced** vía `cuentas:field`
+  (`op:'memoryCaption'`), como el resto de textos.
+- **Pendiente de Juan**: correr el `schema.sql` actualizado (tabla `memories` + bucket
+  `recuerdos` + políticas) y subir las fotos. Sin eso, subir da error controlado (toast).
+
 ## Despliegue
 - **En vivo**: https://jmsoul2.github.io/Paseos_Amigos/ (GitHub Pages, repo público
   `jmsoul2/Paseos_Amigos`). Workflow de Actions publica `src/` en cada push a `main`
@@ -119,6 +142,8 @@ vanilla. Datos de ejemplo = el Excel real del cliente (19 personas, 4 gastos).
 - [x] Hoja **Yo** (dashboard personal filtrado por persona; Total siempre el landing).
 - [x] Agregar/editar gasto por **modal** (sin edición directa en celdas); fix de scroll de la matriz.
 - [x] **Confirmar** por persona (chulo azul, sincronizado) + **imagen** de "para quedar en paz" (canvas) al estar todos confirmados.
+- [x] Fix imagen "para quedar en paz" en **computador** (descarga directa) + Compartir en la fila de Total/Yo en celular.
+- [~] Hoja **Recuerdos** (galería slideshow + subir/borrar/caption + Storage). Código listo en local; **falta correr el SQL** y probar.
 - [ ] Compartir el link con los amigos (probar en producción con gente real).
 - [ ] (Opcional) Resetear confirmaciones automáticamente si cambian los números (hoy es manual).
 - [ ] (Opcional) Pulir el descuadre de redondeo de ~3 pesos en transferencias.

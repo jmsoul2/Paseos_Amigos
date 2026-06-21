@@ -17,10 +17,10 @@
 
   /* ---------- toggles de cabecera ---------- */
   function viewToggle(view) {
-    const btns = [['tabla', 'Total'], ['yo', 'Yo']];
-    return '<div style="display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px">' +
+    const btns = [['tabla', 'Total'], ['yo', 'Yo'], ['recuerdos', 'Recuerdos']];
+    return '<div style="display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px">' +
       btns.map(([k, l]) =>
-        '<button data-act="view" data-view="' + k + '" style="border:none;cursor:pointer;border-radius:999px;padding:8px 18px;font-weight:600;font-size:13px;background:' +
+        '<button data-act="view" data-view="' + k + '" style="border:none;cursor:pointer;border-radius:999px;padding:8px 14px;font-weight:600;font-size:13px;white-space:nowrap;background:' +
         (view === k ? 'var(--accent)' : 'transparent') + ';color:' + (view === k ? 'var(--accent-fg)' : 'var(--muted)') +
         ';transition:all .2s">' + l + '</button>').join('') +
       '</div>';
@@ -34,7 +34,7 @@
           '<input id="trip-name" data-act="tripName" value="' + esc(s.tripName) + '" placeholder="Nombre del paseo" style="font-family:var(--font-head);font-weight:700;font-size:34px;line-height:1.05;letter-spacing:-0.02em;color:var(--fg);background:transparent;border:none;outline:none;width:100%;padding:0" />' +
           '<div style="color:var(--muted);font-size:14px;margin-top:6px">Cada uno pone su chulo en la fila del gasto. Se calcula solo quién debe a quién.</div>' +
         '</div>' +
-        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">' +
+        '<div class="header-controls">' +
           viewToggle(s.view) +
           '<button data-act="share" style="cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:9px;padding:9px 18px;font-size:13px;font-weight:700">Compartir</button>' +
         '</div>' +
@@ -360,6 +360,180 @@
     return yoDashboard(s, derived, me);
   }
 
+  /* ---------- vista RECUERDOS (galería tipo slideshow) ----------
+     Fotos en Supabase Storage; cada foto = una fila en `memories`. La galería
+     transiciona sola (fade) y se puede navegar/subir/borrar. El slideshow se
+     maneja con DOM directo (opacidad) para NO re-renderizar todo cada 4.5s. */
+  let recIdx = 0, recTimer = null, recPaused = false;
+
+  function recHeader() {
+    return '<div style="text-align:center;margin-bottom:18px">' +
+      '<div style="font-family:var(--font-head);font-weight:700;font-size:24px">Recuerdos del paseo</div>' +
+      '<div style="color:var(--muted);font-size:14px;margin-top:5px">La prueba de que sí valió la pena 😄 — a pagar con cariño.</div>' +
+    '</div>';
+  }
+  function recUploadBtn(label) {
+    return '<div style="text-align:center;margin-top:18px">' +
+      '<label style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;border:1px dashed var(--line);background:transparent;color:var(--accent);border-radius:12px;padding:12px 22px;font-weight:600;font-size:14px">' +
+        '<span style="font-size:17px">＋</span> ' + label +
+        '<input data-act="recFile" type="file" accept="image/*,.heic,.heif" multiple style="display:none" /></label>' +
+    '</div>';
+  }
+  function recuerdosView(s) {
+    const mems = s.memories || [];
+    if (mems.length === 0) {
+      return '<div style="max-width:680px;margin:0 auto">' + recHeader() +
+        '<div style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:48px 24px;text-align:center">' +
+          '<div style="font-size:46px;margin-bottom:10px">📸</div>' +
+          '<div style="font-weight:600;font-size:16px;margin-bottom:6px">Aún no hay fotos</div>' +
+          '<div style="color:var(--muted);font-size:14px;max-width:360px;margin:0 auto">Sube las del paseo para revivirlo (y de paso molestar a alguien).</div>' +
+        '</div>' + recUploadBtn('Subir fotos') +
+      '</div>';
+    }
+    if (recIdx >= mems.length) recIdx = 0;
+    const slide = (m, i) =>
+      '<div class="rec-slide" data-i="' + i + '" style="position:absolute;inset:0;opacity:' + (i === recIdx ? '1' : '0') +
+        ';transition:opacity .8s ease;pointer-events:' + (i === recIdx ? 'auto' : 'none') + '">' +
+        '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">' +
+          '<img src="' + esc(m.url) + '" alt="" loading="lazy" style="max-width:100%;max-height:100%;object-fit:contain;display:block" />' +
+        '</div>' +
+        '<button data-act="recDelete" data-id="' + m.id + '" title="Borrar foto" style="position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;background:rgba(0,0,0,.45);color:#fff;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)">🗑</button>' +
+        '<div style="position:absolute;left:0;right:0;bottom:0;padding:26px 16px 14px;background:linear-gradient(transparent,rgba(0,0,0,.78))">' +
+          '<input id="cap-' + m.id + '" data-act="memoryCaption" data-id="' + m.id + '" value="' + esc(m.caption) + '" placeholder="Escribe algo para molestar… 😏" style="width:100%;background:transparent;border:none;outline:none;color:#fff;font-size:15.5px;font-weight:600;text-align:center;font-family:var(--font-body)" /></div>' +
+      '</div>';
+    const navBtn = (act, sym, side) =>
+      '<button data-act="' + act + '" style="position:absolute;top:50%;' + side + ':10px;transform:translateY(-50%);width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;background:rgba(0,0,0,.4);color:#fff;font-size:24px;line-height:1;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)">' + sym + '</button>';
+    const nav = mems.length > 1 ? navBtn('recPrev', '‹', 'left') + navBtn('recNext', '›', 'right') : '';
+    const stage =
+      '<div class="rec-stage" style="position:relative;height:min(68vh,540px);background:#08080a;border:1px solid var(--line);border-radius:18px;overflow:hidden">' +
+        mems.map(slide).join('') + nav +
+      '</div>';
+    const counter = mems.length > 1
+      ? '<div id="rec-counter" style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:10px;font-family:var(--font-num)">' + (recIdx + 1) + ' / ' + mems.length + '</div>'
+      : '';
+    const thumbs = mems.length > 1
+      ? '<div style="display:flex;gap:8px;overflow-x:auto;padding:12px 2px 4px;margin-top:6px">' +
+          mems.map((m, i) =>
+            '<button data-act="recGo" data-i="' + i + '" style="flex:0 0 auto;width:64px;height:64px;border-radius:10px;overflow:hidden;cursor:pointer;padding:0;background:#08080a;border:2px solid ' +
+              (i === recIdx ? 'var(--accent)' : 'transparent') + ';opacity:' + (i === recIdx ? '1' : '.55') + '">' +
+              '<img src="' + esc(m.url) + '" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" /></button>').join('') +
+        '</div>'
+      : '';
+    return '<div style="max-width:760px;margin:0 auto">' + recHeader() + stage + counter + thumbs + recUploadBtn('Agregar más fotos') + '</div>';
+  }
+
+  /* ---------- control del slideshow (DOM directo, sin re-render) ---------- */
+  function recStop() { if (recTimer) { clearInterval(recTimer); recTimer = null; } }
+  function recShow(i) {
+    const stage = root.querySelector('.rec-stage');
+    if (!stage) { recStop(); return; }
+    const slides = stage.querySelectorAll('.rec-slide');
+    const n = slides.length;
+    if (!n) { recStop(); return; }
+    recIdx = ((i % n) + n) % n;
+    slides.forEach(sl => {
+      const on = Number(sl.dataset.i) === recIdx;
+      sl.style.opacity = on ? '1' : '0';
+      sl.style.pointerEvents = on ? 'auto' : 'none';
+    });
+    root.querySelectorAll('[data-act="recGo"]').forEach(t => {
+      const on = Number(t.dataset.i) === recIdx;
+      t.style.borderColor = on ? 'var(--accent)' : 'transparent';
+      t.style.opacity = on ? '1' : '.55';
+    });
+    const counter = root.querySelector('#rec-counter');
+    if (counter) counter.textContent = (recIdx + 1) + ' / ' + n;
+  }
+  function recNext() { recShow(recIdx + 1); }
+  function recPrev() { recShow(recIdx - 1); }
+  function recStart() {
+    recStop();
+    if (C.getState().view !== 'recuerdos') return;
+    if ((C.getState().memories || []).length <= 1) return;
+    recTimer = setInterval(() => { if (!recPaused) recNext(); }, 4500);
+  }
+  function setupRecuerdos() {
+    if (C.getState().view !== 'recuerdos') { recStop(); return; }
+    const stage = root.querySelector('.rec-stage');
+    if (stage) {
+      // Pausar el auto-avance mientras se mira/edita (mouse encima o caption con foco).
+      stage.addEventListener('mouseenter', () => { recPaused = true; });
+      stage.addEventListener('mouseleave', () => { recPaused = false; });
+      stage.addEventListener('focusin', () => { recPaused = true; });
+      stage.addEventListener('focusout', () => { recPaused = false; });
+    }
+    recStart();
+  }
+
+  /* ---------- subir fotos (comprimir + corregir orientación + Storage) ----------
+     HEIC (iPhone): el iPhone suele entregar JPEG al subir desde su navegador, pero
+     desde computador/Mac llega .heic, que Chrome/Firefox no decodifican. Cargamos
+     un conversor (heic2any) SOLO cuando aparece un HEIC, para no pesar de más. */
+  const isHeic = f => /image\/hei[cf]/i.test(f.type || '') || /\.hei[cf]$/i.test(f.name || '');
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = src; sc.onload = res; sc.onerror = () => rej(new Error('no carga ' + src));
+      document.head.appendChild(sc);
+    });
+  }
+  async function heicToJpeg(file) {
+    if (!window.heic2any) await loadScript('https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js');
+    const out = await window.heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+    return Array.isArray(out) ? out[0] : out;
+  }
+  async function compressImage(file, maxSide, quality) {
+    maxSide = maxSide || 1600; quality = quality || 0.82;
+    const src = isHeic(file) ? await heicToJpeg(file) : file;
+    let bmp;
+    try { bmp = await createImageBitmap(src, { imageOrientation: 'from-image' }); }
+    catch (e) { bmp = await createImageBitmap(src); } // navegador viejo: sin corrección EXIF
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    return await new Promise((res, rej) =>
+      cv.toBlob(b => b ? res(b) : rej(new Error('toBlob null')), 'image/jpeg', quality));
+  }
+  async function handlePhotoFiles(fileList) {
+    // HEIC en Windows llega con type vacío → aceptar también por extensión.
+    const files = [...(fileList || [])].filter(f => (f.type && f.type.indexOf('image/') === 0) || isHeic(f));
+    if (!files.length) return;
+    if (!window.CuentasSync || !window.CuentasSync.uploadPhoto) {
+      toast('Necesitas conexión a Supabase para subir fotos.'); return;
+    }
+    for (let k = 0; k < files.length; k++) {
+      toast('Procesando foto ' + (k + 1) + ' de ' + files.length + '…', true);
+      try {
+        const blob = await compressImage(files[k]);
+        const id = C.uid('m');
+        const { url, path } = await window.CuentasSync.uploadPhoto(blob, id);
+        C.addMemory({ id, url, path, caption: '' }); // emite → render() reconstruye la galería
+        recIdx = (C.getState().memories || []).length - 1; // saltar a la recién subida
+        recShow(recIdx);
+      } catch (e) {
+        console.error('[recuerdos] subir', e);
+        toast('No se pudo subir una foto 😕 (revisa el bucket en Supabase)');
+      }
+    }
+    toast('¡Listo! 📸');
+  }
+
+  /* ---------- toast (vive fuera de #app, sobrevive a los re-render) ---------- */
+  let toastEl = null, toastTimer = null;
+  function toast(msg, sticky) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.style.cssText = themeVars() + ';position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:120;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:10px 18px;box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:var(--font-body);font-weight:600;font-size:13px';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.style.display = 'block';
+    clearTimeout(toastTimer);
+    if (!sticky) toastTimer = setTimeout(() => { if (toastEl) toastEl.style.display = 'none'; }, 2200);
+  }
+
   /* ---------- render ---------- */
   function template(s) {
     const net = C.computeNets(s.people, s.expenses);
@@ -377,7 +551,9 @@
         header(s) +
         (s.view === 'yo'
           ? yoView(s, derived)
-          : statsBand(derived.total, s.people, s.expenses) + tablaView(s, derived)) +
+          : s.view === 'recuerdos'
+            ? recuerdosView(s)
+            : statsBand(derived.total, s.people, s.expenses) + tablaView(s, derived)) +
       '</div>' +
     '</div>';
   }
@@ -402,6 +578,7 @@
     // Restaurar el scroll al final para que gane sobre cualquier ajuste del foco.
     const nextMatrix = root.querySelector('.matrix-scroll');
     if (nextMatrix) { nextMatrix.scrollLeft = mx; nextMatrix.scrollTop = my; }
+    setupRecuerdos(); // (re)inicia el slideshow si estamos en la hoja Recuerdos
   }
 
   /* ---------- compartir ---------- */
@@ -552,8 +729,13 @@
     cv.toBlob(async (blob) => {
       if (!blob) return;
       const file = new File([blob], 'para-quedar-en-paz.png', { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: 'Para quedar en paz' }); return; } catch (e) {}
+      // Celular (pantalla táctil) → menú nativo de compartir (WhatsApp, etc.).
+      // Computador (mouse) → descarga directa del PNG: el menú de compartir de
+      // escritorio (Windows) es confuso y casi sin apps; mejor bajar el archivo.
+      const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      if (coarse && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Para quedar en paz' }); return; }
+        catch (e) { if (e && e.name === 'AbortError') return; } // canceló a propósito
       }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = 'para-quedar-en-paz.png';
@@ -583,6 +765,10 @@
       case 'toggle': C.toggleParticipation(exp, el.dataset.person); break;
       case 'all': C.setAll(exp); break;
       case 'none': C.setNone(exp); break;
+      case 'recPrev': recPrev(); recStart(); break; // navegar resetea el temporizador
+      case 'recNext': recNext(); recStart(); break;
+      case 'recGo': recShow(Number(el.dataset.i)); recStart(); break;
+      case 'recDelete': if (confirm('¿Borrar esta foto?')) C.removeMemory(id); break;
     }
   });
   // Campos de texto/número: actualizan el estado SIN redibujar (escritura fluida)
@@ -603,6 +789,10 @@
         field({ op: 'updateExpense', id: exp, patch: { valor: n } });
         break;
       }
+      case 'memoryCaption':
+        C.setMemoryCaption(el.dataset.id, v, true); // silent: no redibuja al escribir
+        field({ op: 'memoryCaption', id: el.dataset.id, value: v });
+        break;
     }
   });
   root.addEventListener('change', (ev) => {
@@ -612,6 +802,8 @@
     if (el.dataset.act === 'payer') { C.updateExpense(el.dataset.exp, { payerId: el.value }); return; }
     // Al confirmar un valor (blur/Enter), refrescamos los cálculos.
     if (el.dataset.act === 'valor') render();
+    // Subir fotos a Recuerdos (input file). Limpiamos el value para poder re-subir la misma.
+    if (el.dataset.act === 'recFile') { const f = el.files; el.value = ''; handlePhotoFiles(f); }
   });
   root.addEventListener('keydown', (ev) => {
     const el = ev.target.closest('[data-act]');

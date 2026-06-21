@@ -42,11 +42,12 @@
   let state = load() || freshState();
   state.view = 'tabla'; // el Total es siempre el landing (en todos los dispositivos)
   if (!state.theme) state.theme = 'noche';
+  if (!Array.isArray(state.memories)) state.memories = []; // hoja "Recuerdos" (fotos)
 
   function freshState() {
     // Primera vez: arranca con el ejemplo (datos reales del Excel del cliente).
     return Object.assign(
-      { tripName: 'Drumcode', theme: 'noche', view: 'tabla', newPerson: '', people: [], expenses: [] },
+      { tripName: 'Drumcode', theme: 'noche', view: 'tabla', newPerson: '', people: [], expenses: [], memories: [] },
       example()
     );
   }
@@ -233,8 +234,29 @@
       emit('setParts', { expId, parts: [] });
     },
 
-    loadExample() { Object.assign(state, { newPerson: '' }, example()); emit('reset', {}); },
-    clearAll() { state.people = []; state.expenses = []; state.newPerson = ''; emit('reset', {}); },
+    // ---- Recuerdos (fotos) ----
+    // La foto ya vive en Storage; aquí solo se guarda su fila (url + ruta + caption).
+    addMemory(mem) {
+      mem = mem || {};
+      const id = mem.id || uid('m');
+      state.memories.push({ id, url: mem.url || '', path: mem.path || '', caption: mem.caption || '', created_at: Date.now() });
+      emit('addMemory', { id });
+      return id;
+    },
+    removeMemory(id) {
+      const m = state.memories.find(x => x.id === id);
+      state.memories = state.memories.filter(x => x.id !== id);
+      emit('removeMemory', { id, path: m ? m.path : '' }); // path → el sync borra el archivo de Storage
+    },
+    setMemoryCaption(id, caption, silent) {
+      const m = state.memories.find(x => x.id === id);
+      if (!m) return;
+      m.caption = caption;
+      silent ? save() : emit('memoryCaption', { id, caption });
+    },
+
+    loadExample() { Object.assign(state, { newPerson: '', memories: [] }, example()); emit('reset', {}); },
+    clearAll() { state.people = []; state.expenses = []; state.memories = []; state.newPerson = ''; emit('reset', {}); },
 
     // Reemplazo total del estado (lo usará el sync al bajar del servidor).
     replaceState(next, silent) {
@@ -246,7 +268,7 @@
   };
 
   function freshStateShell() {
-    return { tripName: '', theme: 'noche', view: 'tabla', newPerson: '', people: [], expenses: [] };
+    return { tripName: '', theme: 'noche', view: 'tabla', newPerson: '', people: [], expenses: [], memories: [] };
   }
 
   /* ---------------- API pública ---------------- */
@@ -261,6 +283,7 @@
     addPerson: M.addPerson, removePerson: M.removePerson, toggleConfirm: M.toggleConfirm,
     addExpense: M.addExpense, updateExpense: M.updateExpense, removeExpense: M.removeExpense,
     toggleParticipation: M.toggleParticipation, setAll: M.setAll, setNone: M.setNone,
+    addMemory: M.addMemory, removeMemory: M.removeMemory, setMemoryCaption: M.setMemoryCaption,
     loadExample: M.loadExample, clearAll: M.clearAll, replaceState: M.replaceState,
   };
 })();

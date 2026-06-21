@@ -62,11 +62,12 @@
   const run = async (q) => { const { error } = await q; if (error) throw error; };
 
   async function fetchState() {
-    const [pe, ex, pa, mt] = await Promise.all([
+    const [pe, ex, pa, mt, me] = await Promise.all([
       sb.from('people').select('*').order('created_at'),
       sb.from('expenses').select('*').order('created_at'),
       sb.from('participations').select('*'),
       sb.from('trip_meta').select('*').eq('id', 1).maybeSingle(),
+      sb.from('memories').select('*').order('created_at'),
     ]);
     if (pe.error || ex.error || pa.error) throw (pe.error || ex.error || pa.error);
     const partsByExp = {};
@@ -78,7 +79,11 @@
       parts: partsByExp[r.id] || [],
     }));
     const tripName = (mt && mt.data && mt.data.name) || 'Drumcode';
-    return { people, expenses, tripName };
+    // memories: si la tabla aún no existe (no han corrido el SQL), no romper la app.
+    const memories = (me && !me.error ? (me.data || []) : []).map(r => ({
+      id: r.id, url: r.url || '', path: r.path || '', caption: r.caption || '',
+    }));
+    return { people, expenses, tripName, memories };
   }
 
   function applyRemote(remote) {
@@ -91,6 +96,7 @@
       newPerson: local.newPerson, // buffer local
       people: remote.people,
       expenses: remote.expenses,
+      memories: remote.memories || [],
     }, true); // silent: no emite 'cuentas:changed' → no genera escritura
     applying = false;
     window.dispatchEvent(new CustomEvent('cuentas:remote-applied'));
@@ -114,10 +120,17 @@
     s.expenses.forEach(e => (e.parts || []).forEach(pid => partRows.push({ expense_id: e.id, person_id: pid })));
     if (partRows.length) await run(sb.from('participations').upsert(partRows));
     await run(sb.from('trip_meta').upsert({ id: 1, name: s.tripName || 'Drumcode' }));
+    // Recuerdos: reemplaza las filas (los archivos de Storage no se tocan aquí).
+    await run(sb.from('memories').delete().neq('id', ''));
+    if (s.memories && s.memories.length) {
+      await run(sb.from('memories').upsert(s.memories.map(m => ({
+        id: m.id, url: m.url || '', path: m.path || '', caption: m.caption || '',
+      }))));
+    }
   }
 
   /* ---------------- re-fetch (con pausa si se está escribiendo) ---------------- */
-  const editableId = id => id === 'trip-name' || id === 'new-person' || /^[cdv]-/.test(id);
+  const editableId = id => id === 'trip-name' || id === 'new-person' || /^[cdv]-/.test(id) || /^cap-/.test(id);
   function isEditingText() {
     const a = document.activeElement;
     return !!(a && a.id && editableId(a.id));
@@ -187,6 +200,15 @@
           await run(sb.from('participations').insert(d.parts.map(pid => ({ expense_id: d.expId, person_id: pid }))));
         }
         break;
+      case 'addMemory': {
+        const m = s.memories.find(x => x.id === d.id) || {};
+        await run(sb.from('memories').insert({ id: d.id, url: m.url || '', path: m.path || '', caption: m.caption || '' }));
+        break;
+      }
+      case 'removeMemory':
+        await run(sb.from('memories').delete().eq('id', d.id));
+        if (d.path) deletePhoto(d.path); // borra también el archivo del bucket
+        break;
       case 'reset':
         await pushAll(C.getState());
         break;
@@ -221,6 +243,8 @@
       if ('valor' in p) patch.valor = p.valor;
       if (!Object.keys(patch).length) return;
       debounceWrite('exp:' + d.id + ':' + Object.keys(patch).join(','), () => run(sb.from('expenses').update(patch).eq('id', d.id)));
+    } else if (d.op === 'memoryCaption') {
+      debounceWrite('mem:' + d.id, () => run(sb.from('memories').update({ caption: d.value }).eq('id', d.id)));
     }
   });
   // Al salir de un campo: vaciar pendientes y reconciliar con el servidor.
@@ -228,6 +252,24 @@
     const t = e.target;
     if (t && t.id && editableId(t.id)) flushPending().then(scheduleRefetch);
   });
+
+  /* ---------------- Storage (fotos de Recuerdos) ---------------- */
+  const PHOTO_BUCKET = 'recuerdos';
+  async function uploadPhoto(blob, id) {
+    const path = id + '.jpg';
+    const { error } = await sb.storage.from(PHOTO_BUCKET)
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true, cacheControl: '31536000' });
+    if (error) throw error;
+    const { data } = sb.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+    return { url: data.publicUrl, path };
+  }
+  async function deletePhoto(path) {
+    if (!path) return;
+    try { await sb.storage.from(PHOTO_BUCKET).remove([path]); }
+    catch (e) { console.warn('[sync] deletePhoto', e); }
+  }
+  // API para app.js (la subida/compresión vive en la UI; aquí solo la red).
+  window.CuentasSync = { uploadPhoto, deletePhoto, refetch: scheduleRefetch, pushAll: () => pushAll(C.getState()) };
 
   /* ---------------- arranque ---------------- */
   function subscribe() {
