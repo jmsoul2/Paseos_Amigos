@@ -25,15 +25,7 @@
         ';transition:all .2s">' + l + '</button>').join('') +
       '</div>';
   }
-  function themeToggle(theme) {
-    const btns = [['noche', 'Noche'], ['limpio', 'Limpio'], ['calido', 'Cálido']];
-    return '<div style="display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px">' +
-      btns.map(([k, l]) =>
-        '<button data-act="theme" data-theme="' + k + '" style="border:none;cursor:pointer;border-radius:999px;padding:7px 13px;font-weight:600;font-size:12.5px;background:' +
-        (theme === k ? 'var(--accent)' : 'transparent') + ';color:' + (theme === k ? 'var(--accent-fg)' : 'var(--muted)') +
-        ';transition:all .2s">' + l + '</button>').join('') +
-      '</div>';
-  }
+  // (Selector de tema retirado: la app usa solo el tema "Noche".)
   function header(s) {
     const btn = 'cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:9px;padding:7px 13px;font-size:12.5px;font-weight:500';
     return '' +
@@ -45,7 +37,6 @@
         '</div>' +
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">' +
           viewToggle(s.view) +
-          themeToggle(s.theme) +
           '<div style="display:flex;gap:8px">' +
             '<button data-act="share" style="cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:9px;padding:7px 15px;font-size:12.5px;font-weight:700">Compartir</button>' +
             '<button data-act="load" style="' + btn + '">Cargar ejemplo</button>' +
@@ -339,7 +330,7 @@
       total: s.expenses.reduce((a, e) => a + (Number(e.valor) || 0), 0),
       balances: s.people.map(p => ({ id: p.id, name: p.name, net: net[p.id] || 0 })).sort((a, b) => b.net - a.net),
     };
-    const t = C.THEMES[s.theme] || C.THEMES.noche;
+    const t = C.THEMES.noche; // tema único
     const vars = Object.keys(t).map(k => k + ':' + t[k]).join(';');
     return '<div style="' + vars + ';min-height:100vh;background:var(--bg);color:var(--fg);font-family:var(--font-body);padding:30px 22px 70px;transition:background .35s ease,color .35s ease">' +
       '<div style="max-width:1240px;margin:0 auto">' +
@@ -378,7 +369,6 @@
     const act = el.dataset.act, exp = el.dataset.exp, id = el.dataset.id;
     switch (act) {
       case 'view': C.setView(el.dataset.view); break;
-      case 'theme': C.setTheme(el.dataset.theme); break;
       case 'share': onShare(); break;
       case 'load': if (confirm('¿Cargar el ejemplo? Reemplaza lo que tengas ahora.')) C.loadExample(); break;
       case 'clear': if (confirm('¿Vaciar todo? Se borran todas las personas y gastos.')) C.clearAll(); break;
@@ -391,30 +381,40 @@
       case 'none': C.setNone(exp); break;
     }
   });
+  // Campos de texto/número: actualizan el estado SIN redibujar (escritura fluida)
+  // y avisan al sync por separado ('cuentas:field', con escritura debounced).
+  const field = (detail) => window.dispatchEvent(new CustomEvent('cuentas:field', { detail }));
   root.addEventListener('input', (ev) => {
     const el = ev.target.closest('[data-act]');
     if (!el) return;
     const act = el.dataset.act, exp = el.dataset.exp, v = el.value;
     switch (act) {
-      // Silenciosos (no redibujan; el valor ya está en el DOM mientras se escribe):
-      case 'tripName': C.setTripName(v, true); break;
-      case 'newPerson': C.setNewPerson(v); break;
-      case 'concepto': C.updateExpense(exp, { concepto: v }, true); break;
-      case 'dia': C.updateExpense(exp, { dia: v }, true); break;
-      // El valor sí afecta los cálculos → redibuja (conservando foco/cursor):
-      case 'valor': C.updateExpense(exp, { valor: v === '' ? 0 : Number(v) }); break;
+      case 'tripName':  C.setTripName(v, true); field({ op: 'tripName', value: v }); break;
+      case 'newPerson': C.setNewPerson(v); break; // buffer local: ni sync ni render
+      case 'concepto':  C.updateExpense(exp, { concepto: v }, true); field({ op: 'updateExpense', id: exp, patch: { concepto: v } }); break;
+      case 'dia':       C.updateExpense(exp, { dia: v }, true); field({ op: 'updateExpense', id: exp, patch: { dia: v } }); break;
+      case 'valor': {
+        const n = v === '' ? 0 : Number(v);
+        C.updateExpense(exp, { valor: n }, true);
+        field({ op: 'updateExpense', id: exp, patch: { valor: n } });
+        break;
+      }
     }
   });
   root.addEventListener('change', (ev) => {
     const el = ev.target.closest('[data-act]');
-    if (!el || el.dataset.act !== 'payer') return;
-    C.updateExpense(el.dataset.exp, { payerId: el.value });
+    if (!el) return;
+    // El pagador es una acción discreta → mutación normal (redibuja + sincroniza).
+    if (el.dataset.act === 'payer') { C.updateExpense(el.dataset.exp, { payerId: el.value }); return; }
+    // Al confirmar un valor (blur/Enter), refrescamos los cálculos.
+    if (el.dataset.act === 'valor') render();
   });
   root.addEventListener('keydown', (ev) => {
     const el = ev.target.closest('[data-act]');
     if (el && el.dataset.act === 'newPerson' && ev.key === 'Enter') C.addPerson();
   });
 
-  window.addEventListener('cuentas:changed', render);
+  window.addEventListener('cuentas:changed', render);        // cambios locales estructurales
+  window.addEventListener('cuentas:remote-applied', render); // estado bajado del servidor
   render();
 })();

@@ -24,12 +24,19 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
     cálculos puros (`computeNets`, `computeOwed`, `computeTransfers`, `buildSummary`),
     temas (`THEMES`), datos de ejemplo, y **API de mutaciones granular**. Cada mutación
     guarda y emite `cuentas:changed` con `{ op, ... }`.
-  - `app.js` — Capa de UI: render de las vistas **Tabla** y **Tarjetas**, temas, y
-    delegación de eventos en `#app`. Redibuja en cada `cuentas:changed` preservando
-    foco/cursor. Estilos inline portados 1:1 del handoff (alta fidelidad).
+  - `app.js` — Capa de UI: render de las vistas **Tabla** y **Tarjetas** (tema único
+    Noche), delegación de eventos en `#app`. Redibuja en `cuentas:changed` y en
+    `cuentas:remote-applied` preservando foco/cursor. Los campos de texto avisan al
+    sync por `cuentas:field`. Estilos inline portados 1:1 del handoff (alta fidelidad).
+  - `sync.js` — Sincronización en vivo con Supabase: carga inicial (+siembra si vacío),
+    suscripción realtime → re-fetch → `replaceState` silencioso, y traducción de cada
+    acción a su escritura (chulo = una fila). Pastilla de estado abajo-izquierda.
+  - `supabase-config.js` — `url` + `anonKey` (públicos por diseño; la seguridad la da RLS).
+- `supabase/schema.sql` — Tablas (`people`, `expenses`, `participations`, `trip_meta`),
+  RLS de link abierto y `realtime`. Pegar en el SQL Editor de Supabase.
 - `.github/workflows/deploy.yml` — Publica `src/` en GitHub Pages en cada push a `main`.
 - `netlify.toml` — Config alternativa (publish=`src`) por si se quiere usar Netlify.
-- `package.json` — Metadatos + script `dev`. Sin dependencias (Supabase irá por CDN).
+- `package.json` — Metadatos + script `dev`. Supabase se carga por CDN (sin npm).
 - `active/` — Scratch / memoria de trabajo (gitignored). Contiene el handoff de diseño original.
 
 ## Modelo de datos (estado en localStorage, clave `cuentas_paseo_v3`)
@@ -55,32 +62,39 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
 ## Cálculo y UX (decisiones)
 - Moneda: COP sin decimales, separador de miles `.`, prefijo `$`
   (`Intl.NumberFormat('es-CO')`). Saldos negativos con el signo menos U+2212 (−).
-- 3 temas (Noche/Limpio/Cálido) = sets de variables CSS en el contenedor raíz.
+- Tema único **Noche** (set de variables CSS en el contenedor raíz). `THEMES` aún
+  define limpio/cálido en `core.js` por si se quiere reactivar el selector.
 - Compartir: `navigator.share()` → WhatsApp (`wa.me`) → portapapeles (fallback).
 - Re-render completo en cada cambio con restauración de foco/cursor; los inputs de
   texto (concepto, día, nombre, título) actualizan el estado **sin** redibujar para
   no estorbar al escribir; el **valor** sí redibuja porque afecta los cálculos.
 
-## Sincronización en vivo (Fase 2 — Supabase, PENDIENTE)
-Objetivo: cada amigo abre el link y marca SUS propios chulos; todos ven los cambios
-al instante. **Por qué Supabase y no Netlify Blobs**: el problema de sobreescritura
-nace de guardar todo el arreglo de una (last-write-wins). Con Supabase cada chulo es
-una **fila independiente** `(expense_id, person_id)` → dos personas marcando casillas
-distintas nunca se pisan, y `realtime` empuja los cambios a todos en vivo.
-- Los amigos **no** tocan Supabase: abren el link de Pages y listo (sin cuenta/login).
-- Solo Juan crea **una** cuenta gratis de Supabase (una vez).
-- La *anon key* va en el frontend (es pública por diseño); la seguridad la dan las
-  políticas **RLS**, no esconder la llave. Configurar RLS con cuidado al conectar.
-- Modelo de tablas previsto: `trips`, `people`, `expenses`, `participations`
-  (PK compuesta expense_id+person_id = el chulo). `core.js` ya expone una API de
-  mutaciones granular que mapea 1:1 a estas escrituras.
+## Sincronización en vivo (Supabase — IMPLEMENTADO)
+Cada amigo abre el link y marca SUS propios chulos; todos ven los cambios al instante.
+**Por qué Supabase y no Netlify Blobs**: el problema de sobreescritura nace de guardar
+todo el arreglo de una (last-write-wins). Con Supabase cada chulo es una **fila
+independiente** `(expense_id, person_id)` → dos personas marcando casillas distintas
+nunca se pisan, y `realtime` empuja los cambios a todos en vivo.
+- **Acceso**: link abierto (RLS `using(true)`); **un** paseo compartido (todos editan el mismo).
+- **Tablas**: `people`, `expenses`, `participations` (PK `expense_id+person_id` = el chulo),
+  `trip_meta` (fila única con el nombre). IDs de **texto** generados por el cliente.
+- **`sync.js`**: al abrir baja todo; si el servidor está vacío lo siembra con el ejemplo
+  local. Realtime sobre todo el schema → re-fetch debounced → `replaceState` silencioso
+  → redibuja. Ops estructurales = escritura inmediata; campos de texto = escritura
+  debounced, pausando el re-fetch mientras se teclea (se vacía al salir del campo).
+- Los amigos **no** tocan Supabase: solo abren el link. La *anon key* va en el frontend
+  (pública por diseño); la seguridad la dan las políticas **RLS**.
+- Proyecto Supabase: `xxtassbprolppqcejxml` (cuenta de Juan).
 
 ## Despliegue
-- **Host elegido**: GitHub Pages (repo público `cuentas-paseo`). Workflow de Actions
-  publica `src/` en cada push a `main`. Activar en Settings › Pages › Source: GitHub Actions.
+- **En vivo**: https://jmsoul2.github.io/Paseos_Amigos/ (GitHub Pages, repo público
+  `jmsoul2/Paseos_Amigos`). Workflow de Actions publica `src/` en cada push a `main`
+  (Source = "GitHub Actions" + `enablement:true` en el workflow).
+- Flujo de trabajo: iterar en local (`npm run dev` → http://localhost:5050) y hacer
+  push solo cuando algo esté listo.
 - Alternativa lista: Netlify (publish=`src`, ver `netlify.toml`). Sin funciones (el
   backend es Supabase), así que no consume build ni "créditos" relevantes.
-- `index.html` usa rutas relativas → funciona bajo subpath (`usuario.github.io/cuentas-paseo/`).
+- `index.html` usa rutas relativas → funciona bajo subpath (`/Paseos_Amigos/`).
 
 ## Origen
 Diseñado en Claude Design y exportado como handoff bundle (`active/temp/`). El
@@ -94,10 +108,11 @@ vanilla. Datos de ejemplo = el Excel real del cliente (19 personas, 4 gastos).
 - Actualizar este CLAUDE.md a medida que el proyecto evoluciona.
 
 ## Objetivos Actuales
-- [x] Portar diseño + lógica del handoff a vanilla (Tabla, Tarjetas, 3 temas, saldos, transferencias, compartir).
+- [x] Portar diseño + lógica del handoff a vanilla (Tabla, Tarjetas, saldos, transferencias, compartir).
 - [x] Persistencia local (localStorage) + cálculos verificados con el ejemplo.
-- [ ] Subir a GitHub (repo público `cuentas-paseo`) y activar GitHub Pages.
-- [ ] Fase 2: sincronización en vivo con Supabase (cada chulo = una fila; realtime).
+- [x] Subir a GitHub (`jmsoul2/Paseos_Amigos`) y activar GitHub Pages.
+- [x] Tema único Noche.
+- [x] Sincronización en vivo con Supabase (cada chulo = una fila; realtime). Probado OK.
 - [ ] Compartir el link con los amigos.
 - [ ] (Opcional) Pulir el descuadre de redondeo de ~3 pesos en transferencias.
 - [ ] (Opcional) Links de pago (Nequi/Daviplata/Bre-B) junto a cada transferencia.
