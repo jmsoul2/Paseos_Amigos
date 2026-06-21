@@ -180,12 +180,16 @@
       const parts = e.parts.filter(pid => people.some(p => p.id === pid));
       const perHead = parts.length > 0 ? fmt((Number(e.valor) || 0) / parts.length) : '—';
       const payerName = (people.find(p => p.id === e.payerId) || {}).name || '— nadie —';
-      return '<tr>' +
+      return '<tr data-exp-row="' + e.id + '">' +
         '<td style="position:sticky;left:0;z-index:2;background:var(--panel);border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;min-width:200px">' +
-          '<button data-act="editExpense" data-exp="' + e.id + '" title="Editar gasto" style="cursor:pointer;width:100%;text-align:left;border:none;background:transparent;color:var(--fg);padding:11px 12px;display:flex;align-items:center;gap:8px;font-family:var(--font-head)">' +
-            '<span style="font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0' + (e.concepto ? '' : ';color:var(--muted)') + '">' + esc(e.concepto || 'Sin nombre') + '</span>' +
-            '<span style="margin-left:auto;color:var(--muted);font-size:12px;flex:none">✎</span>' +
-          '</button>' +
+          '<div style="display:flex;align-items:center">' +
+            '<span class="exp-grip" draggable="true" data-drag="' + e.id + '" title="Arrastra para reordenar" style="cursor:grab;flex:none;padding:11px 4px 11px 9px;color:var(--muted);font-size:15px;line-height:1;user-select:none">⠿</span>' +
+            '<button data-act="editExpense" data-exp="' + e.id + '" title="Editar gasto" style="cursor:pointer;flex:1;min-width:0;text-align:left;border:none;background:transparent;color:var(--fg);padding:11px 12px 11px 2px;display:flex;align-items:center;gap:8px;font-family:var(--font-head)">' +
+              '<span style="font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0' + (e.concepto ? '' : ';color:var(--muted)') + '">' + esc(e.concepto || 'Sin nombre') + '</span>' +
+              '<span style="margin-left:auto;color:var(--muted);font-size:12px;flex:none">✎</span>' +
+            '</button>' +
+            (e.notes ? '<button data-act="viewNotes" data-exp="' + e.id + '" title="Ver detalles" style="cursor:pointer;flex:none;border:none;background:transparent;color:var(--accent);font-size:14px;line-height:1;padding:11px 11px 11px 2px">💬</button>' : '') +
+          '</div>' +
         '</td>' +
         '<td style="border-bottom:1px solid var(--line);padding:11px 12px;font-size:13px;color:var(--muted);white-space:nowrap">' + (esc(e.dia) || '—') + '</td>' +
         '<td style="border-bottom:1px solid var(--line);padding:11px 12px;text-align:right;font-family:var(--font-num);font-weight:700;font-size:14px;white-space:nowrap">' + (e.valor ? fmt(e.valor) : '—') + '</td>' +
@@ -330,6 +334,7 @@
         '<span style="flex:1;min-width:0">' +
           '<span style="display:block;font-family:var(--font-head);font-weight:600;font-size:15px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(e.concepto || 'Sin nombre') + '</span>' +
           '<span style="display:block;font-size:12.5px;color:var(--muted);margin-top:3px">' + (e.dia ? esc(e.dia) + ' · ' : '') + payerTxt + ' · ' + (e.valor ? fmt(e.valor) : '—') + '</span>' +
+          (e.notes ? '<span style="display:block;font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.4;white-space:normal">💬 ' + esc(e.notes) + '</span>' : '') +
         '</span>' +
         '<span style="flex:none;text-align:right;font-family:var(--font-num);font-weight:700;font-size:14px;color:' + (inIt ? 'var(--neg)' : 'var(--muted)') + '">' + (inIt ? '−' + share : '—') + '</span>' +
       '</button>';
@@ -658,8 +663,10 @@
             '<label style="flex:1"><span style="' + lbl + '">Monto</span>' +
               '<input id="mf-valor" type="number" inputmode="numeric" value="' + (exp && exp.valor ? exp.valor : '') + '" placeholder="0" style="' + inS + ';font-family:var(--font-num);font-weight:700" /></label>' +
           '</div>' +
-          '<label style="display:block;margin-bottom:22px"><span style="' + lbl + '">¿Quién pagó?</span>' +
+          '<label style="display:block;margin-bottom:14px"><span style="' + lbl + '">¿Quién pagó?</span>' +
             '<select id="mf-payer" style="' + inS + ';font-weight:600;cursor:pointer">' + payerOpts + '</select></label>' +
+          '<label style="display:block;margin-bottom:22px"><span style="' + lbl + '">Detalles / Notas <span style="text-transform:none;letter-spacing:0;opacity:.65">(opcional)</span></span>' +
+            '<textarea id="mf-notes" rows="3" placeholder="Ej: 3 kg de carne, lo organizó el Mono, faltó sal…" style="' + inS + ';resize:vertical;min-height:76px;line-height:1.45">' + esc(exp ? exp.notes : '') + '</textarea></label>' +
           '<div style="display:flex;gap:10px">' +
             '<button data-cancel style="flex:1;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:10px;padding:12px;font-size:14px;font-weight:600">Cancelar</button>' +
             '<button data-save style="flex:1;cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:10px;padding:12px;font-size:14px;font-weight:700">Guardar</button>' +
@@ -677,10 +684,11 @@
       const vRaw = panel.querySelector('#mf-valor').value;
       const valor = vRaw === '' ? 0 : Math.max(0, Math.round(Number(vRaw) || 0));
       const payerId = panel.querySelector('#mf-payer').value;
+      const notes = panel.querySelector('#mf-notes').value.trim();
       if (isNew && !concepto && !valor) { panel.querySelector('#mf-concepto').focus(); return; }
       closeExpenseForm();
-      if (isNew) C.addExpense({ concepto, dia, valor, payerId });
-      else C.updateExpense(id, { concepto, dia, valor, payerId });
+      if (isNew) C.addExpense({ concepto, dia, valor, payerId, notes });
+      else C.updateExpense(id, { concepto, dia, valor, payerId, notes });
     };
     overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) closeExpenseForm(); });
     panel.querySelector('[data-close]').addEventListener('click', closeExpenseForm);
@@ -690,10 +698,44 @@
     if (del) del.addEventListener('click', () => { if (confirm('¿Eliminar este gasto?')) { closeExpenseForm(); C.removeExpense(id); } });
     panel.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') { ev.preventDefault(); closeExpenseForm(); }
-      else if (ev.key === 'Enter' && ev.target.tagName !== 'SELECT') { ev.preventDefault(); save(); }
+      else if (ev.key === 'Enter' && ev.target.tagName !== 'SELECT' && ev.target.tagName !== 'TEXTAREA') { ev.preventDefault(); save(); }
     });
     const first = panel.querySelector('#mf-concepto');
     if (first) first.focus();
+  }
+
+  /* ---------- detalles del gasto (solo lectura, abre con 💬) ---------- */
+  function openExpenseDetails(id) {
+    if (!modalRoot) { modalRoot = document.createElement('div'); document.body.appendChild(modalRoot); }
+    const s = C.getState();
+    const exp = s.expenses.find(e => e.id === id);
+    if (!exp) return;
+    const payerName = (s.people.find(p => p.id === exp.payerId) || {}).name || '— nadie —';
+    const meta = [exp.dia, 'Pagó ' + payerName, exp.valor ? fmt(exp.valor) : null].filter(Boolean).join('  ·  ');
+    const notesHtml = exp.notes
+      ? esc(exp.notes).replace(/\n/g, '<br>')
+      : '<span style="color:var(--muted)">Sin detalles todavía.</span>';
+    modalRoot.innerHTML =
+      '<div data-overlay style="' + themeVars() + ';position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:18px;font-family:var(--font-body)">' +
+        '<div data-panel style="width:min(440px,100%);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;color:var(--fg);box-shadow:0 18px 50px rgba(0,0,0,.5)">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:5px">' +
+            '<div style="font-family:var(--font-head);font-weight:700;font-size:20px;min-width:0;word-break:break-word">' + esc(exp.concepto || 'Sin nombre') + '</div>' +
+            '<button data-close style="cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:22px;line-height:1;width:30px;height:30px;flex:none">×</button>' +
+          '</div>' +
+          '<div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">' + esc(meta) + '</div>' +
+          '<div style="font-size:14.5px;line-height:1.55;word-break:break-word">' + notesHtml + '</div>' +
+          '<div style="display:flex;gap:10px;margin-top:22px">' +
+            '<button data-cancel style="flex:1;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--fg);border-radius:10px;padding:11px;font-size:14px;font-weight:600">Cerrar</button>' +
+            '<button data-edit style="flex:1;cursor:pointer;border:none;background:var(--accent);color:var(--accent-fg);border-radius:10px;padding:11px;font-size:14px;font-weight:700">Editar</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    const overlay = modalRoot.firstElementChild;
+    const panel = overlay.querySelector('[data-panel]');
+    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) closeExpenseForm(); });
+    panel.querySelector('[data-close]').addEventListener('click', closeExpenseForm);
+    panel.querySelector('[data-cancel]').addEventListener('click', closeExpenseForm);
+    panel.querySelector('[data-edit]').addEventListener('click', () => { closeExpenseForm(); openExpenseForm(id); });
   }
 
   /* ---------- imagen "Para quedar en paz" (canvas, sin librerías) ---------- */
@@ -788,6 +830,7 @@
       case 'removePerson': if (confirm('¿Quitar a esta persona? Se borran sus chulos.')) C.removePerson(id); break;
       case 'addExpense': openExpenseForm(null); break;
       case 'editExpense': openExpenseForm(exp); break;
+      case 'viewNotes': openExpenseDetails(exp); break;
       case 'removeExpense': C.removeExpense(exp); break;
       case 'toggle': C.toggleParticipation(exp, el.dataset.person); break;
       case 'all': C.setAll(exp); break;
@@ -837,6 +880,44 @@
     const el = ev.target.closest('[data-act]');
     if (el && el.dataset.act === 'newPerson' && ev.key === 'Enter') C.addPerson();
   });
+
+  /* ---------- reordenar gastos arrastrando (mouse / HTML5 DnD) ---------- */
+  let dragExpId = null;
+  function clearDropHint() {
+    root.querySelectorAll('[data-exp-row]').forEach(tr => {
+      const cell = tr.firstElementChild; if (cell) cell.style.boxShadow = '';
+    });
+  }
+  function dropTarget(ev) {
+    const tr = ev.target.closest('[data-exp-row]');
+    if (!tr || tr.dataset.expRow === dragExpId) return null;
+    const r = tr.getBoundingClientRect();
+    return { tr, after: ev.clientY > r.top + r.height / 2 };
+  }
+  root.addEventListener('dragstart', (ev) => {
+    const g = ev.target.closest('[data-drag]');
+    if (!g) return;
+    dragExpId = g.dataset.drag;
+    if (ev.dataTransfer) { ev.dataTransfer.effectAllowed = 'move'; try { ev.dataTransfer.setData('text/plain', dragExpId); } catch (e) {} }
+  });
+  root.addEventListener('dragover', (ev) => {
+    if (!dragExpId) return;
+    const t = dropTarget(ev);
+    if (!t) return;
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'move';
+    clearDropHint();
+    const cell = t.tr.firstElementChild;
+    if (cell) cell.style.boxShadow = 'inset 0 ' + (t.after ? '-3px' : '3px') + ' 0 0 var(--accent)';
+  });
+  root.addEventListener('drop', (ev) => {
+    if (!dragExpId) return;
+    const t = dropTarget(ev);
+    clearDropHint();
+    if (t) { ev.preventDefault(); C.moveExpense(dragExpId, t.tr.dataset.expRow, t.after); }
+    dragExpId = null;
+  });
+  root.addEventListener('dragend', () => { clearDropHint(); dragExpId = null; });
 
   window.addEventListener('cuentas:changed', render);        // cambios locales estructurales
   window.addEventListener('cuentas:remote-applied', render); // estado bajado del servidor

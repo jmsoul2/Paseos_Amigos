@@ -62,20 +62,22 @@
   const run = async (q) => { const { error } = await q; if (error) throw error; };
 
   async function fetchState() {
-    const [pe, ex, pa, mt, me] = await Promise.all([
+    const [pe, ex0, pa, mt, me] = await Promise.all([
       sb.from('people').select('*').order('created_at'),
-      sb.from('expenses').select('*').order('created_at'),
+      sb.from('expenses').select('*').order('position', { ascending: true, nullsFirst: false }).order('created_at'),
       sb.from('participations').select('*'),
       sb.from('trip_meta').select('*').eq('id', 1).maybeSingle(),
       sb.from('memories').select('*').order('created_at'),
     ]);
+    // Schema viejo (sin columna 'position'): reintentar ordenando por created_at.
+    const ex = ex0.error ? await sb.from('expenses').select('*').order('created_at') : ex0;
     if (pe.error || ex.error || pa.error) throw (pe.error || ex.error || pa.error);
     const partsByExp = {};
     (pa.data || []).forEach(r => { (partsByExp[r.expense_id] = partsByExp[r.expense_id] || []).push(r.person_id); });
     const people = (pe.data || []).map(r => ({ id: r.id, name: r.name, confirmed: !!r.confirmed }));
     const expenses = (ex.data || []).map(r => ({
       id: r.id, concepto: r.concepto || '', dia: r.dia || '',
-      valor: Number(r.valor) || 0, payerId: r.payer_id || '',
+      valor: Number(r.valor) || 0, payerId: r.payer_id || '', notes: r.notes || '',
       parts: partsByExp[r.id] || [],
     }));
     const tripName = (mt && mt.data && mt.data.name) || 'Drumcode';
@@ -111,9 +113,9 @@
       await run(sb.from('people').upsert(s.people.map(p => ({ id: p.id, name: p.name }))));
     }
     if (s.expenses.length) {
-      await run(sb.from('expenses').upsert(s.expenses.map(e => ({
+      await run(sb.from('expenses').upsert(s.expenses.map((e, i) => ({
         id: e.id, concepto: e.concepto || '', dia: e.dia || '',
-        valor: e.valor || 0, payer_id: e.payerId || null,
+        valor: e.valor || 0, payer_id: e.payerId || null, position: i, notes: e.notes || '',
       }))));
     }
     const partRows = [];
@@ -171,8 +173,12 @@
         const ex = s.expenses.find(x => x.id === d.id) || {};
         await run(sb.from('expenses').insert({
           id: d.id, concepto: ex.concepto || '', dia: ex.dia || '',
-          valor: ex.valor || 0, payer_id: ex.payerId || null,
+          valor: ex.valor || 0, payer_id: ex.payerId || null, notes: ex.notes || '',
         }));
+        // Posición (al final): best-effort — si el schema aún no tiene la columna,
+        // el error se ignora y el orden cae a created_at (no rompe el alta).
+        const pos = s.expenses.findIndex(x => x.id === d.id);
+        await sb.from('expenses').update({ position: pos < 0 ? s.expenses.length : pos }).eq('id', d.id);
         const rows = (ex.parts || []).map(pid => ({ expense_id: d.id, person_id: pid }));
         if (rows.length) await run(sb.from('participations').upsert(rows));
         break;
@@ -180,12 +186,13 @@
       case 'removeExpense':
         await run(sb.from('expenses').delete().eq('id', d.id)); // cascada borra chulos
         break;
-      case 'updateExpense': { // pagador y, desde el formulario, concepto/día/valor en UNA escritura
+      case 'updateExpense': { // pagador y, desde el formulario, concepto/día/valor/notas en UNA escritura
         const p = d.patch || {};
         const patch = {};
         if ('concepto' in p) patch.concepto = p.concepto;
         if ('dia' in p) patch.dia = p.dia;
         if ('valor' in p) patch.valor = p.valor;
+        if ('notes' in p) patch.notes = p.notes;
         if ('payerId' in p) patch.payer_id = p.payerId || null;
         if (Object.keys(patch).length) await run(sb.from('expenses').update(patch).eq('id', d.id));
         break;
@@ -200,6 +207,12 @@
           await run(sb.from('participations').insert(d.parts.map(pid => ({ expense_id: d.expId, person_id: pid }))));
         }
         break;
+      case 'reorderExpenses': {
+        // Reescribe la posición de cada gasto según el nuevo orden del arreglo.
+        const ids = d.ids || [];
+        await Promise.all(ids.map((id, i) => run(sb.from('expenses').update({ position: i }).eq('id', id))));
+        break;
+      }
       case 'addMemory': {
         const m = s.memories.find(x => x.id === d.id) || {};
         await run(sb.from('memories').insert({ id: d.id, url: m.url || '', path: m.path || '', caption: m.caption || '' }));

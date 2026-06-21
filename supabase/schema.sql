@@ -26,8 +26,20 @@ create table if not exists expenses (
   dia         text not null default '',
   valor       numeric not null default 0,
   payer_id    text references people(id) on delete set null,
+  position    int,
+  notes       text not null default '',
   created_at  timestamptz not null default now()
 );
+-- Migración: orden manual de los gastos (arrastrar para reordenar). Seguro re-ejecutar.
+alter table expenses add column if not exists position int;
+-- Migración: detalles/notas del gasto (texto libre, opcional). Seguro re-ejecutar.
+alter table expenses add column if not exists notes text not null default '';
+-- Inicializa la posición de las filas existentes por orden de creación (solo las que no tengan).
+with ordered as (
+  select id, (row_number() over (order by created_at)) - 1 as rn
+  from expenses where position is null
+)
+update expenses e set position = ordered.rn from ordered where e.id = ordered.id;
 
 -- El "chulo": una fila por (gasto, persona). Unidad atómica e independiente.
 create table if not exists participations (

@@ -55,7 +55,7 @@ Abrir `src/index.html` en el navegador (funciona con `file://`). Para servirla:
   view: 'tabla'|'yo'|'recuerdos',   // 'tabla'=Total · 'yo'=hoja personal · 'recuerdos'=galería (Total es siempre el landing)
   newPerson: string,                // buffer del input "agregar persona"
   people:   [{ id, name, confirmed:boolean }], // confirmed = la persona dio su OK (chulo azul)
-  expenses: [{ id, concepto, dia, valor:number, payerId, parts:[personId,...] }],
+  expenses: [{ id, concepto, dia, valor:number, payerId, notes, parts:[personId,...] }], // orden del arreglo = orden visible (col `position`, arrastrable); notes = detalles (💬)
   memories: [{ id, url, path, caption }] // fotos del paseo (archivo en Storage; url+ruta+caption)
 }
 ```
@@ -143,7 +143,8 @@ vanilla. Datos de ejemplo = el Excel real del cliente (19 personas, 4 gastos).
 - [x] Agregar/editar gasto por **modal** (sin edición directa en celdas); fix de scroll de la matriz.
 - [x] **Confirmar** por persona (chulo azul, sincronizado) + **imagen** de "para quedar en paz" (canvas) al estar todos confirmados.
 - [x] Fix imagen "para quedar en paz" en **computador** (descarga directa) + Compartir en la fila de Total/Yo en celular.
-- [~] Hoja **Recuerdos** (galería slideshow + subir/borrar/caption + Storage). Código listo en local; **falta correr el SQL** y probar.
+- [x] Hoja **Recuerdos** (galería slideshow + subir/borrar/caption + Storage). En prod y probado OK (subida con HEIC→JPEG; fix de FileList).
+- [~] **Reordenar gastos** arrastrando (mouse / HTML5 DnD; columna `position`) + **detalles/notas** por gasto (col `notes`: textarea en el modal, 💬 en la matriz abre tarjeta de solo lectura, inline en hoja Yo). Código listo en local; **falta correr el SQL** (position + notes) y probar. (Arrastrar: en celular no aún.)
 - [ ] Compartir el link con los amigos (probar en producción con gente real).
 - [ ] (Opcional) Resetear confirmaciones automáticamente si cambian los números (hoy es manual).
 - [ ] (Opcional) Pulir el descuadre de redondeo de ~3 pesos en transferencias.

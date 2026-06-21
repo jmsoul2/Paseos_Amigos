@@ -194,7 +194,7 @@
       // Defaults + lo que venga del formulario (concepto/día/valor/pagador).
       // parts arranca con TODOS (mismo criterio que addPerson); luego se ajusta con chulos.
       const exp = Object.assign({
-        concepto: '', dia: '', valor: 0,
+        concepto: '', dia: '', valor: 0, notes: '',
         payerId: (state.people[0] && state.people[0].id) || '',
         parts: state.people.map(p => p.id),
       }, fields || {}, { id });
@@ -232,6 +232,18 @@
       if (!e) return;
       e.parts = [];
       emit('setParts', { expId, parts: [] });
+    },
+    // Reordenar gastos (arrastrar): mueve `id` antes/después de `targetId`.
+    // El orden = el orden del arreglo; el sync lo persiste con la columna `position`.
+    moveExpense(id, targetId, after) {
+      const arr = state.expenses;
+      const from = arr.findIndex(e => e.id === id);
+      if (from < 0 || id === targetId) return;
+      const [item] = arr.splice(from, 1);
+      const to = arr.findIndex(e => e.id === targetId);
+      if (to < 0) arr.push(item);
+      else arr.splice(after ? to + 1 : to, 0, item);
+      emit('reorderExpenses', { ids: arr.map(e => e.id) });
     },
 
     // ---- Recuerdos (fotos) ----
@@ -282,7 +294,7 @@
     setTripName: M.setTripName, setTheme: M.setTheme, setView: M.setView, setNewPerson: M.setNewPerson,
     addPerson: M.addPerson, removePerson: M.removePerson, toggleConfirm: M.toggleConfirm,
     addExpense: M.addExpense, updateExpense: M.updateExpense, removeExpense: M.removeExpense,
-    toggleParticipation: M.toggleParticipation, setAll: M.setAll, setNone: M.setNone,
+    toggleParticipation: M.toggleParticipation, setAll: M.setAll, setNone: M.setNone, moveExpense: M.moveExpense,
     addMemory: M.addMemory, removeMemory: M.removeMemory, setMemoryCaption: M.setMemoryCaption,
     loadExample: M.loadExample, clearAll: M.clearAll, replaceState: M.replaceState,
   };
