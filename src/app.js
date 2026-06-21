@@ -829,8 +829,9 @@
     if (el.dataset.act === 'payer') { C.updateExpense(el.dataset.exp, { payerId: el.value }); return; }
     // Al confirmar un valor (blur/Enter), refrescamos los cálculos.
     if (el.dataset.act === 'valor') render();
-    // Subir fotos a Recuerdos (input file). Limpiamos el value para poder re-subir la misma.
-    if (el.dataset.act === 'recFile') { const f = el.files; el.value = ''; handlePhotoFiles(f); }
+    // Subir fotos a Recuerdos (input file). OJO: copiar los File a un arreglo ANTES
+    // de limpiar el value — el.files es una lista viva y se vacía al hacer value=''.
+    if (el.dataset.act === 'recFile') { const f = [...el.files]; el.value = ''; handlePhotoFiles(f); }
   });
   root.addEventListener('keydown', (ev) => {
     const el = ev.target.closest('[data-act]');
