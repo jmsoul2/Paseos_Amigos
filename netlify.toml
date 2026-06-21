@@ -1,0 +1,5 @@
+# Cuentas del Paseo — sitio estático.
+# El frontend vive en src/ y se publica tal cual (sin build).
+# El backend (sincronización en vivo) será Supabase, no funciones de Netlify.
+[build]
+  publish = "src"

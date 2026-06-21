@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Cuentas del Paseo</title>
+<meta name="description" content="Divisor de gastos del paseo: cada uno marca su chulo y se calcula quién debe a quién." />
+<meta name="theme-color" content="#0a0a0c" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: #0a0a0c; }
+  input, button, select, textarea { font-family: inherit; font-size: inherit; }
+  ::placeholder { color: var(--muted); opacity: .6; }
+  select { appearance: none; -webkit-appearance: none; }
+  .matrix-scroll::-webkit-scrollbar { height: 10px; }
+  .matrix-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 8px; }
+  /* hover de las celdas de la matriz (no se puede inline) */
+  .cell-btn:hover { background: var(--cell-hover) !important; }
+</style>
+</head>
+<body>
+  <!-- app.js renderiza todo el contenedor temático aquí dentro -->
+  <div id="app"></div>
+
+  <!-- Sugerencias de día compartidas por todos los inputs de fecha -->
+  <datalist id="dias-list">
+    <option value="Viernes"></option>
+    <option value="Sábado"></option>
+    <option value="Domingo"></option>
+    <option value="Jueves"></option>
+    <option value="Lunes"></option>
+    <option value="Martes"></option>
+    <option value="Miércoles"></option>
+  </datalist>
+
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

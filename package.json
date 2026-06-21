@@ -1,0 +1,9 @@
+{
+  "name": "cuentas-paseo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cuentas del Paseo — divisor de gastos con matriz tipo Excel; cada quien marca su chulo. Frontend vanilla, sincronización en vivo con Supabase.",
+  "scripts": {
+    "dev": "npx serve src"
+  }
+}
