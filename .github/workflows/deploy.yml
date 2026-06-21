@@ -29,6 +29,9 @@ jobs:
         uses: actions/checkout@v4
       - name: Configurar Pages
         uses: actions/configure-pages@v5
+        with:
+          # Activa Pages en modo "GitHub Actions" automáticamente si no lo estaba.
+          enablement: true
       - name: Subir artefacto (carpeta src/)
         uses: actions/upload-pages-artifact@v3
         with:
