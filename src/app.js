@@ -365,6 +365,11 @@
      transiciona sola (fade) y se puede navegar/subir/borrar. El slideshow se
      maneja con DOM directo (opacidad) para NO re-renderizar todo cada 4.5s. */
   let recIdx = 0, recTimer = null, recPaused = false;
+  // iOS convierte HEIC→JPEG nativo SOLO si el accept no menciona HEIC. Si lo
+  // mencionamos (para que Windows los muestre), iOS entrega el HEIC crudo y la
+  // conversión en el celular falla. Por eso: en iPhone/iPad accept = image/*.
+  const IS_IOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
   function recHeader() {
     return '<div style="text-align:center;margin-bottom:18px">' +
@@ -376,7 +381,7 @@
     return '<div style="text-align:center;margin-top:18px">' +
       '<label style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;border:1px dashed var(--line);background:transparent;color:var(--accent);border-radius:12px;padding:12px 22px;font-weight:600;font-size:14px">' +
         '<span style="font-size:17px">＋</span> ' + label +
-        '<input data-act="recFile" type="file" accept="image/*,.heic,.heif" multiple style="display:none" /></label>' +
+        '<input data-act="recFile" type="file" accept="' + (IS_IOS ? 'image/*' : 'image/*,.heic,.heif') + '" multiple style="display:none" /></label>' +
     '</div>';
   }
   function recuerdosView(s) {
