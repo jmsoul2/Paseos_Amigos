@@ -48,17 +48,10 @@
         '<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:7px">' + label + '</div>' +
         '<div style="font-family:var(--font-num);font-weight:700;font-size:28px;letter-spacing:-0.01em">' + value + '</div>' +
       '</div>';
-    const avg = people.length > 0 ? fmt(total / people.length) : '—';
-    const accent =
-      '<div style="flex:1 1 200px;background:var(--accent);color:var(--accent-fg);border-radius:16px;padding:18px 20px">' +
-        '<div style="font-size:12px;opacity:.7;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:7px">Por cabeza (promedio)</div>' +
-        '<div style="font-family:var(--font-num);font-weight:700;font-size:28px;letter-spacing:-0.01em">' + avg + '</div>' +
-      '</div>';
     return '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px">' +
       card('Total del paseo', fmt(total), '1 1 200px') +
       card('Personas', people.length, '1 1 130px') +
       card('Gastos', expenses.length, '1 1 130px') +
-      accent +
     '</div>';
   }
 
